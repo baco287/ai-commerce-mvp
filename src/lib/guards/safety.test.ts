@@ -19,7 +19,12 @@ function sourceFiles(dir: string): string[] {
 
 describe("MVP-Sicherheitsgrenzen", () => {
   it("hat alle Sicherheitsschalter ausgeschaltet", () => {
-    expect(SAFETY_SWITCHES).toEqual({ autoPurchaseEnabled: false, realAdsEnabled: false, paidApiCallsEnabled: false });
+    expect(SAFETY_SWITCHES).toEqual({
+      autoPurchaseEnabled: false,
+      realAdsEnabled: false,
+      paidApiCallsEnabled: false,
+      shopifyWriteEnabled: false,
+    });
   });
 
   it("lässt die Sicherheitsschalter zur Laufzeit nicht verändern", () => {

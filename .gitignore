@@ -61,3 +61,7 @@ next-env.d.ts
 credentials*.json
 service-account*.json
 secrets/
+
+# Shopify CLI (lokale Metadaten, Store-Verknüpfung)
+.shopify/
+storefront/.shopify/

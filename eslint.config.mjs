@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Shopify-Theme (Liquid + Dawn-JS) hat eigene Prüfungen (Theme Check)
+    "storefront/**",
   ]),
 ]);
 

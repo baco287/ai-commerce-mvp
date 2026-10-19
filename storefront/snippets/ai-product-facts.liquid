@@ -1,0 +1,76 @@
+{%- comment -%}
+  AI Commerce: Kundensichtbare Produktfakten (Demo-Hinweis, Lieferzeit, Versand).
+
+  Liest ausschließlich öffentliche Metafelder aus dem Namespace "ai_commerce":
+  - delivery_days_min / delivery_days_max (Ganzzahl, Werktage)
+  Interne Felder (Einkaufspreis, Lieferanten-ID, Marge, Compliance-/Freigabestatus) werden hier
+  bewusst NIE ausgegeben – siehe docs/SHOPIFY-INTEGRATION.md.
+
+  Ohne gepflegte Werte erscheint ein Platzhalter statt einer erfundenen Lieferzusage.
+
+  Demo-Produkte (Tag "ai-commerce-demo"): Kauf-Bedienelemente werden ausgeblendet und
+  "Ausverkauft" wird durch "Demo – nicht bestellbar" ersetzt. Das ist nur die Darstellung –
+  gesperrt sind Demo-Produkte serverseitig durch Shopify selbst (Entwurf, Bestand 0, kein Überverkauf).
+
+  Eingebunden über den Custom-Liquid-Block "facts" in templates/product.json – Theme Check erkennt
+  Verweise aus JSON-Templates nicht, daher die Ausnahme in .theme-check.yml (OrphanedSnippet).
+  Styles: assets/ai-commerce.css (global geladen in layout/theme.liquid).
+
+  Accepts:
+  - product: {Object} Produkt
+{%- endcomment -%}
+
+{%- liquid
+  assign is_demo = false
+  if product.tags contains 'ai-commerce-demo'
+    assign is_demo = true
+  endif
+  assign days_min = product.metafields.ai_commerce.delivery_days_min.value
+  assign days_max = product.metafields.ai_commerce.delivery_days_max.value
+-%}
+
+<div class="ai-facts">
+  {%- if is_demo -%}
+    <span class="ai-facts__status">Demo – nicht bestellbar</span>
+    <p class="ai-facts__notice">
+      <strong>Demo-Produkt.</strong> Dieser Artikel dient nur zur Vorschau und ist nicht zum Verkauf freigegeben.
+    </p>
+    <style>
+      #MainProduct-{{ section.id }} .product-form__buttons,
+      #MainProduct-{{ section.id }} .product-form__quantity,
+      #MainProduct-{{ section.id }} .price__badge-sold-out,
+      #MainProduct-{{ section.id }} .product-form__error-message-wrapper {
+        display: none !important;
+      }
+      #MainProduct-{{ section.id }} .product-form__input--pill input[type='radio'].disabled + label,
+      #MainProduct-{{ section.id }} .product-form__input--pill input[type='radio']:disabled + label {
+        text-decoration: none;
+        color: rgb(var(--color-foreground));
+      }
+      #MainProduct-{{ section.id }} .product-form__input .label-unavailable {
+        display: none;
+      }
+    </style>
+  {%- endif -%}
+
+  <dl class="ai-facts__list">
+    <div class="ai-facts__row">
+      <dt>Lieferzeit</dt>
+      <dd>
+        {%- if days_min and days_max -%}
+          {%- if days_min == days_max -%}
+            ca. {{ days_min }} Werktage nach Zahlungseingang
+          {%- else -%}
+            ca. {{ days_min }}–{{ days_max }} Werktage nach Zahlungseingang
+          {%- endif -%}
+        {%- else -%}
+          <span class="ai-facts__placeholder">wird vor Veröffentlichung ergänzt</span>
+        {%- endif -%}
+      </dd>
+    </div>
+    <div class="ai-facts__row">
+      <dt>Versand</dt>
+      <dd>Versandkosten werden im Checkout angezeigt.</dd>
+    </div>
+  </dl>
+</div>

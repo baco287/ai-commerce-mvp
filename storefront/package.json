@@ -1,0 +1,16 @@
+{
+  "name": "ai-commerce-storefront",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shopify-Theme (Basis: Dawn 16) für den AI-Commerce-Kundenshop",
+  "scripts": {
+    "validate": "node scripts/validate-settings.mjs",
+    "validate:products": "node scripts/validate-products-csv.mjs",
+    "check": "npm run validate && npm run validate:products && shopify theme check --fail-level error",
+    "dev": "shopify theme dev",
+    "list": "shopify theme list"
+  },
+  "devDependencies": {
+    "@shopify/cli": "^4.9.4"
+  }
+}

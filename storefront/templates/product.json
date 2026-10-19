@@ -1,0 +1,121 @@
+{
+  "sections": {
+    "main": {
+      "type": "main-product",
+      "blocks": {
+        "title": {
+          "type": "title"
+        },
+        "price": {
+          "type": "price"
+        },
+        "facts": {
+          "type": "custom_liquid",
+          "settings": {
+            "custom_liquid": "{% render 'ai-product-facts', product: product %}"
+          }
+        },
+        "variant_picker": {
+          "type": "variant_picker",
+          "settings": {
+            "picker_type": "button",
+            "swatch_shape": "square"
+          }
+        },
+        "quantity_selector": {
+          "type": "quantity_selector"
+        },
+        "buy_buttons": {
+          "type": "buy_buttons",
+          "settings": {
+            "show_dynamic_checkout": false,
+            "show_gift_card_recipient": false
+          }
+        },
+        "description": {
+          "type": "description"
+        },
+        "shipping_tab": {
+          "type": "collapsible_tab",
+          "settings": {
+            "heading": "Lieferung & Versand",
+            "icon": "truck",
+            "content": "<p><em>Platzhalter:</em> Versandarten, Versandkosten und Lieferzeiten werden vor der Veröffentlichung je Produkt festgelegt. Es werden keine Lieferzusagen gemacht, solange diese nicht mit dem Lieferanten vereinbart sind.</p>",
+            "page": ""
+          }
+        },
+        "returns_tab": {
+          "type": "collapsible_tab",
+          "settings": {
+            "heading": "Rückgabe & Widerruf",
+            "icon": "return",
+            "content": "<p><em>Platzhalter:</em> Es gilt die Widerrufsbelehrung des Shops. Der Text wird vor der Veröffentlichung fachkundig erstellt bzw. geprüft.</p>",
+            "page": ""
+          }
+        },
+        "safety_tab": {
+          "type": "collapsible_tab",
+          "settings": {
+            "heading": "Produktsicherheit & Herstellerangaben",
+            "icon": "check_mark",
+            "content": "<p><em>Platzhalter:</em> Angaben zu Hersteller bzw. verantwortlicher Person in der EU, Warn- und Sicherheitshinweise (GPSR) sowie ggf. CE-Kennzeichnung werden vor der Veröffentlichung ergänzt.</p>",
+            "page": ""
+          }
+        },
+        "share": {
+          "type": "share",
+          "settings": {
+            "share_label": "Teilen"
+          }
+        }
+      },
+      "block_order": [
+        "title",
+        "price",
+        "facts",
+        "variant_picker",
+        "quantity_selector",
+        "buy_buttons",
+        "description",
+        "shipping_tab",
+        "returns_tab",
+        "safety_tab",
+        "share"
+      ],
+      "settings": {
+        "enable_sticky_info": true,
+        "color_scheme": "scheme-1",
+        "media_position": "left",
+        "gallery_layout": "thumbnail",
+        "media_size": "large",
+        "constrain_to_viewport": true,
+        "media_fit": "contain",
+        "image_zoom": "lightbox",
+        "mobile_thumbnails": "show",
+        "hide_variants": true,
+        "enable_video_looping": false,
+        "padding_top": 36,
+        "padding_bottom": 12
+      }
+    },
+    "related-products": {
+      "type": "related-products",
+      "settings": {
+        "heading": "Das könnte Ihnen auch gefallen",
+        "heading_size": "h2",
+        "products_to_show": 4,
+        "columns_desktop": 4,
+        "color_scheme": "scheme-1",
+        "image_ratio": "square",
+        "image_shape": "default",
+        "show_secondary_image": true,
+        "show_vendor": false,
+        "show_rating": false,
+        "columns_mobile": "2",
+        "padding_top": 36,
+        "padding_bottom": 36
+      }
+    }
+  },
+  "order": ["main", "related-products"]
+}

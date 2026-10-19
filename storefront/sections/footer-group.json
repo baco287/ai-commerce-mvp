@@ -1,0 +1,48 @@
+{
+  "name": "t:sections.footer.name",
+  "type": "footer",
+  "sections": {
+    "footer": {
+      "type": "footer",
+      "blocks": {
+        "shop_links": {
+          "type": "link_list",
+          "settings": {
+            "heading": "Shop",
+            "menu": "footer"
+          }
+        },
+        "service": {
+          "type": "text",
+          "settings": {
+            "heading": "Service",
+            "subtext": "<p><a href=\"/pages/kontakt\">Kontakt</a></p><p><a href=\"/search\">Suche</a></p><p>Versand &amp; Lieferzeiten: <em>Platzhalter</em></p>"
+          }
+        },
+        "legal": {
+          "type": "text",
+          "settings": {
+            "heading": "Rechtliches",
+            "subtext": "<p>Impressum · Datenschutzerklärung · AGB · Widerrufsbelehrung · Versand- und Zahlungsbedingungen</p><p><strong>Platzhalter:</strong> Die Rechtstexte werden vor der Veröffentlichung von einer fachkundigen Stelle erstellt bzw. geprüft und in Shopify unter Einstellungen → Richtlinien hinterlegt. Bis dahin ist dieser Shop nicht für Verkäufe freigegeben.</p>"
+          }
+        }
+      },
+      "block_order": ["shop_links", "service", "legal"],
+      "settings": {
+        "color_scheme": "scheme-4",
+        "newsletter_enable": false,
+        "newsletter_heading": "",
+        "enable_follow_on_shop": false,
+        "show_social": false,
+        "enable_country_selector": false,
+        "enable_language_selector": false,
+        "payment_enable": false,
+        "show_policy": true,
+        "margin_top": 0,
+        "padding_top": 48,
+        "padding_bottom": 36
+      }
+    }
+  },
+  "order": ["footer"]
+}

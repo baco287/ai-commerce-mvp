@@ -1,0 +1,72 @@
+{
+  "$comment": "Geplante Produkt-Metafelder für die Verbindung Dashboard <-> Shopify. Anlegen in Shopify unter Einstellungen > Benutzerdefinierte Daten > Produkte (oder später per Admin-API). storefrontAccess NONE = im Shop und über die Storefront-API NICHT sichtbar. Interne Kalkulationswerte dürfen niemals öffentlich sein.",
+  "namespace": "ai_commerce",
+  "ownerType": "PRODUCT",
+  "definitions": [
+    {
+      "key": "dashboard_product_id",
+      "name": "Dashboard-Produkt-ID",
+      "type": "single_line_text_field",
+      "storefrontAccess": "NONE",
+      "description": "ID des Produkts in der KI-Kontrollzentrale (z. B. p-led)."
+    },
+    {
+      "key": "supplier_offer_id",
+      "name": "Lieferanten-Angebots-ID",
+      "type": "single_line_text_field",
+      "storefrontAccess": "NONE",
+      "description": "Gewähltes Lieferantenangebot aus dem Dashboard (z. B. p-led-o2)."
+    },
+    {
+      "key": "supplier_shipping_cost",
+      "name": "Versandkosten Lieferant (EUR)",
+      "type": "number_decimal",
+      "storefrontAccess": "NONE",
+      "description": "Versand- und Importkosten des Lieferanten je Stück. Der Einkaufspreis selbst liegt im Shopify-Standardfeld 'Kosten pro Artikel'."
+    },
+    {
+      "key": "supplier_stock",
+      "name": "Bestand beim Lieferanten",
+      "type": "number_integer",
+      "storefrontAccess": "NONE",
+      "description": "Zuletzt synchronisierter Lieferantenbestand."
+    },
+    {
+      "key": "expected_margin_percent",
+      "name": "Erwartete Marge (%)",
+      "type": "number_decimal",
+      "storefrontAccess": "NONE",
+      "description": "Deckungsbeitrag im Verhältnis zum Nettopreis laut Dashboard-Kalkulation."
+    },
+    {
+      "key": "compliance_status",
+      "name": "Compliance-Status",
+      "type": "single_line_text_field",
+      "storefrontAccess": "NONE",
+      "validations": { "choices": ["offen", "in_pruefung", "freigegeben", "abgelehnt"] },
+      "description": "CE/GPSR/Registrierungen geprüft?"
+    },
+    {
+      "key": "approval_status",
+      "name": "Freigabestatus",
+      "type": "single_line_text_field",
+      "storefrontAccess": "NONE",
+      "validations": { "choices": ["entwurf", "angefragt", "freigegeben", "abgelehnt"] },
+      "description": "Menschliche Freigabe zur Veröffentlichung. Nur 'freigegeben' + Compliance 'freigegeben' erlaubt das manuelle Aktivieren."
+    },
+    {
+      "key": "delivery_days_min",
+      "name": "Lieferzeit min. (Werktage)",
+      "type": "number_integer",
+      "storefrontAccess": "PUBLIC_READ",
+      "description": "Kundensichtbar. Nur mit vertraglich bestätigten Werten befüllen."
+    },
+    {
+      "key": "delivery_days_max",
+      "name": "Lieferzeit max. (Werktage)",
+      "type": "number_integer",
+      "storefrontAccess": "PUBLIC_READ",
+      "description": "Kundensichtbar. Nur mit vertraglich bestätigten Werten befüllen."
+    }
+  ]
+}

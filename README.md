@@ -10,6 +10,17 @@ Werbung und Shop-Änderungen laufen nur über Freigaben.
 
 Markenname ist noch offen – bis dahin „AI Commerce“. Das Projekt ist unabhängig von QonteX.
 
+## Projektstruktur
+
+| Ordner | Inhalt | Start |
+| --- | --- | --- |
+| `/` (Wurzel) | KI-Kontrollzentrale, Next.js | `npm run dev` → <http://localhost:3000> |
+| [`storefront/`](storefront/README.md) | Kundenshop als Shopify-Theme (Basis Dawn 16) | `cd storefront && npx shopify theme dev --store …` |
+| `docs/` | Architektur, Shopify-Anbindung | – |
+
+Beide Teile sind unabhängig: eigene Abhängigkeiten, eigene Prüfungen. ESLint und TypeScript des
+Dashboards ignorieren `storefront/`.
+
 ## Schnellstart
 
 Voraussetzung: Node.js 20.9 oder neuer (getestet mit Node 25).
@@ -58,3 +69,4 @@ Dashboard: <http://localhost:3000>
 
 Welche Funktionen serverseitig laufen und welche nur simuliert sind, warum die Einkaufssperre nicht
 umgangen werden kann und die nächsten Schritte: [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md).
+Geplante Datenverbindung zwischen Dashboard und Shopify: [docs/SHOPIFY-INTEGRATION.md](docs/SHOPIFY-INTEGRATION.md).

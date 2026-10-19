@@ -1,0 +1,8 @@
+MatchingTranslations:
+  enabled: false
+TemplateLength:
+  enabled: false
+OrphanedSnippet:
+  ignore:
+    # Wird über einen custom_liquid-Block in templates/product.json gerendert
+    - snippets/ai-product-facts.liquid

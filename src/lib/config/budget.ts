@@ -10,12 +10,15 @@ export const SAFETY_SWITCHES = Object.freeze({
   realAdsEnabled: false,
   /** Echte Aufrufe kostenpflichtiger APIs (OpenAI, Claude, Shopify Admin …) */
   paidApiCallsEnabled: false,
+  /** Schreibzugriff auf Shopify (Produkte anlegen/ändern). Auch wenn aktiv: nur Entwürfe, nie veröffentlichen. */
+  shopifyWriteEnabled: false,
 } as const);
 
 export const SAFETY_SWITCH_LABELS: Record<keyof typeof SAFETY_SWITCHES, string> = {
   autoPurchaseEnabled: "Automatischer Lieferanteneinkauf",
   realAdsEnabled: "Echte Werbeanzeigen",
   paidApiCallsEnabled: "Kostenpflichtige API-Aufrufe",
+  shopifyWriteEnabled: "Shopify-Schreibzugriff",
 };
 
 export const BUDGET = {

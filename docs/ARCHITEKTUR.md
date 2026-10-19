@@ -38,6 +38,7 @@ src/
     data.ts               Datenzugriff der Oberfläche (heute Demo, später DB/Shopify)
     calc/                 Nachfrage-Score, Margen-/Preisrechnung, Lieferantenbewertung
     guards/purchase.ts    Einkaufssperre (Zahlung + Finanzierung + Limits)
+    shopify/              Shopify-Produktanlage: productSet-Eingabe, Guards, Dry-Run-Abgleich, CSV-Export
     config/               Annahmen, Budget, Sicherheitsschalter, Freigaberegeln
     demo/                 Gekennzeichnete Demodaten (deterministisch)
 ```
