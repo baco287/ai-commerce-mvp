@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+/* Farbsystem der Kontrollzentrale: dunkle Flächen, dezente Cyan-/Blau-Akzente. */
+@theme {
+  --color-base: #060a13;
+  --color-surface: #0b1220;
+  --color-surface-2: #101a2e;
+  --color-line: #1b2742;
+  --color-line-strong: #27365a;
+  --color-fg: #e6ecf7;
+  --color-muted: #8d9ab5;
+  --color-subtle: #5f6d8a;
+  --color-accent: #22d3ee;
+  --color-accent-2: #3b82f6;
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-base);
+  color: var(--color-fg);
+  background-image:
+    radial-gradient(1200px 500px at 85% -10%, rgb(34 211 238 / 0.07), transparent 60%),
+    radial-gradient(900px 500px at 10% -20%, rgb(59 130 246 / 0.08), transparent 60%);
+  background-attachment: fixed;
+}
+
+::selection {
+  background: rgb(34 211 238 / 0.3);
+}
+
+/* Schmale, dunkle Scrollbars für Tabellen und Navigation */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-strong) transparent;
+}

@@ -44,3 +44,20 @@ desktop.ini
 
 # Claude Code (local settings)
 .claude/settings.local.json
+
+# Next.js / TypeScript
+*.tsbuildinfo
+next-env.d.ts
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# Secrets in other formats (credentials never belong in the repo)
+*.p12
+*.pfx
+credentials*.json
+service-account*.json
+secrets/
