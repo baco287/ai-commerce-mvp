@@ -1,0 +1,3 @@
+# Die Shopify-Import-CSV wird aus den Dashboard-Daten erzeugt und von einem Test byte-genau
+# verglichen (src/lib/shopify/csv-export.test.ts). Immer LF, damit der Test unter Windows nicht scheitert.
+storefront/data/*.csv text eol=lf

@@ -54,8 +54,34 @@ describe("MVP-Sicherheitsgrenzen", () => {
     expect(serverActions).toEqual([]);
   });
 
-  it("macht keine Netzwerkaufrufe und liest keine Zugangsdaten", () => {
-    const offenders = sourceFiles(SRC).filter((f) => /\bfetch\(|process\.env/.test(readFileSync(f, "utf8")));
-    expect(offenders).toEqual([]);
+  // Netzwerk und Zugangsdaten sind nur an genau diesen Stellen erlaubt (Shopify, nur lesend).
+  // Jede neue Stelle muss hier bewusst eingetragen werden.
+  const NETWORK_ALLOWED = ["lib/shopify/server/auth.ts", "lib/shopify/server/admin-client.ts"];
+  const ENV_ALLOWED = ["lib/shopify/server/config.ts"];
+  const rel = (f: string) => f.slice(SRC.length + 1).replaceAll("\\", "/");
+
+  it("macht Netzwerkaufrufe nur im serverseitigen Shopify-Connector", () => {
+    const network = /\bfetch\b|XMLHttpRequest|\baxios\b|node:https?|from ["']https?["']|\bWebSocket\b/;
+    const offenders = sourceFiles(SRC)
+      .filter((f) => network.test(readFileSync(f, "utf8")))
+      .map(rel);
+    expect(offenders.sort()).toEqual([...NETWORK_ALLOWED].sort());
+  });
+
+  it("liest Zugangsdaten nur in der Shopify-Konfiguration", () => {
+    const offenders = sourceFiles(SRC)
+      .filter((f) => /process\.env/.test(readFileSync(f, "utf8")))
+      .map(rel);
+    expect(offenders).toEqual(ENV_ALLOWED);
+  });
+
+  it("hält den Shopify-Connector vom Browser fern", () => {
+    const files = sourceFiles(SRC);
+    const serverModules = files.filter((f) => /[\\/]lib[\\/]shopify[\\/]server[\\/]/.test(f));
+    expect(serverModules.length).toBeGreaterThan(0);
+    for (const f of serverModules) expect(readFileSync(f, "utf8"), rel(f)).toMatch(/^(\/\/.*\n|\s)*import "server-only";/);
+
+    const clientFiles = files.filter((f) => /^["']use client["']/m.test(readFileSync(f, "utf8")));
+    for (const f of clientFiles) expect(readFileSync(f, "utf8"), rel(f)).not.toMatch(/lib\/shopify\/server|process\.env/);
   });
 });

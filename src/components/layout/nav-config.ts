@@ -1,4 +1,4 @@
-import { Bot, Database, LayoutDashboard, PackageSearch, ShieldCheck, Store, Truck, Workflow, type LucideIcon } from "lucide-react";
+import { Bot, Database, LayoutDashboard, PackageSearch, RefreshCw, ShieldCheck, Truck, Workflow, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   href: string;
@@ -12,11 +12,11 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/lieferanten", label: "Lieferanten", icon: Truck },
   { href: "/agenten", label: "KI-Agenten", icon: Bot },
   { href: "/freigaben", label: "Freigaben & Budget", icon: ShieldCheck },
+  { href: "/shopify", label: "Shopify-Sync", icon: RefreshCw },
 ];
 
 /** Bereiche, die in späteren Phasen angebunden werden. */
 export const PLANNED_ITEMS: NavItem[] = [
-  { href: "#", label: "Shopify-Shop", icon: Store },
   { href: "#", label: "n8n-Automationen", icon: Workflow },
   { href: "#", label: "PostgreSQL-Daten", icon: Database },
 ];

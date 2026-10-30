@@ -84,6 +84,8 @@ im Dev-Server) und werden als fertiges HTML ausgeliefert; der Browser rechnet ni
 | Einkaufssperre je Bestellung | `src/lib/guards/purchase.ts` | ja |
 | Sicherheitsschalter (zur Laufzeit eingefroren) | `src/lib/config/budget.ts` | ja |
 | Kennzahlen, Tagesverlauf, Bestellliste | `src/lib/data.ts` | ja |
+| Shopify: Produkte lesen (echte Daten, nur `read_products`) und mit Soll vergleichen | `src/lib/shopify/server/`, `reconcile.ts` | ja |
+| Pipeline zur Produktanlage (nur Dry-Run, sendet nichts) | `src/lib/shopify/pipeline.ts` | ja |
 
 Die **Logik** ist echt – die **Eingangsdaten** sind es nicht (siehe unten).
 
@@ -107,21 +109,23 @@ Die **Logik** ist echt – die **Eingangsdaten** sind es nicht (siehe unten).
 
 ### Nicht vorhanden
 
-Shopify, PostgreSQL, n8n, OpenAI/Claude sind nicht angebunden. Es gibt keine Datenbank, keine
-Benutzerkonten und keine gespeicherten Zustände.
+Schreibender Shopify-Zugriff, PostgreSQL, n8n, OpenAI/Claude sind nicht angebunden. Es gibt keine
+Datenbank, keine Benutzerkonten und keine gespeicherten Zustände. Shopify ist **nur lesend** verbunden.
 
 ## Warum die Einkaufssperre im MVP nicht umgangen werden kann
 
-1. **Es gibt keinen Weg zum Einkauf.** Phase 1 enthält keine Server Actions, keine API-Routen
-   (`route.ts`), kein Proxy/Middleware, keine Formulare und keine Netzwerkaufrufe (`fetch`).
-   Ein Klick in der Oberfläche kann den Server also gar nicht zu einer Aktion veranlassen.
+1. **Es gibt keinen Weg zum Einkauf.** Es gibt keine Server Actions, keine API-Routen (`route.ts`),
+   kein Proxy/Middleware und keine Formulare. Netzwerkzugriff existiert nur im Read-only-Shopify-Connector
+   (`src/lib/shopify/server/`), der ausschließlich Produkte liest und jede Mutation vor dem Senden ablehnt.
+   Ein Klick in der Oberfläche kann den Server also nicht zu einer Aktion veranlassen.
 2. **Die Sperre entscheidet nur.** `evaluateAutoPurchase` gibt ein Ergebnis zurück; Code, der
    tatsächlich bestellt, existiert nicht.
 3. **Der Schalter ist fest im Code.** `SAFETY_SWITCHES.autoPurchaseEnabled = false` ist mit
    `Object.freeze` gesichert und lässt sich weder über die Oberfläche noch zur Laufzeit ändern.
 4. **Regressionstests** (`src/lib/guards/safety.test.ts`) schlagen fehl, sobald ein Schalter
-   eingeschaltet, ein Server-Endpunkt ergänzt oder `fetch`/`process.env` verwendet wird. Das
-   Lockern einer Sperre ist damit immer eine sichtbare, bewusste Code-Änderung.
+   eingeschaltet, ein Server-Endpunkt ergänzt oder Netzwerk/`process.env` außerhalb der drei
+   freigegebenen Shopify-Serverdateien verwendet wird. Das Lockern einer Sperre ist damit immer eine
+   sichtbare, bewusste Code-Änderung.
 
 Sobald in Phase 2 echte Endpunkte (z. B. Shopify-Webhooks, n8n) hinzukommen, muss die Sperre
 **serverseitig im Endpunkt** geprüft werden – nie nur in der Oberfläche – und die Tests werden

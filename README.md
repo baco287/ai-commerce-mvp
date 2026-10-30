@@ -50,6 +50,7 @@ Dashboard: <http://localhost:3000>
 | `/lieferanten` | Mehrere Angebote je Produkt, Vergleich von Einkauf, Versand, Import, Lieferzeit; Markierung des günstigsten **geeigneten** Lieferanten |
 | `/agenten` | Die sechs KI-Agenten mit Befugnissen, Freigabepflichten und Status (Pausieren nur lokal) |
 | `/freigaben` | Freigabe-Warteschlange, Sicherheitsschalter, Grenzwerte, Startbudget 500 € |
+| `/shopify` | Shopify-Synchronisierung: **echte** Produktdaten aus dem Dev Store (nur lesend) im Abgleich mit der Kontrollzentrale; Dry-Run der automatischen Produktanlage |
 
 ## Tech-Stack
 
@@ -69,4 +70,5 @@ Dashboard: <http://localhost:3000>
 
 Welche Funktionen serverseitig laufen und welche nur simuliert sind, warum die Einkaufssperre nicht
 umgangen werden kann und die nächsten Schritte: [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md).
-Geplante Datenverbindung zwischen Dashboard und Shopify: [docs/SHOPIFY-INTEGRATION.md](docs/SHOPIFY-INTEGRATION.md).
+Shopify: [Read-only-API einrichten](docs/SHOPIFY-API-EINRICHTUNG.md) · [Datenfelder](docs/SHOPIFY-INTEGRATION.md) ·
+[Automatisierungs-Fahrplan](docs/SHOPIFY-AUTOMATISIERUNG.md) · [CSV-Import](docs/SHOPIFY-PRODUKTIMPORT.md).

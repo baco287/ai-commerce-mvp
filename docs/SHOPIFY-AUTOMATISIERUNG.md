@@ -10,9 +10,12 @@ kalkulieren und legen Produkte über die **Shopify Admin GraphQL API** an. Mensc
 | Dashboard-Daten → Shopify-Produkteingabe (`productSet`) | **fertig, getestet** – `src/lib/shopify/product-input.ts` |
 | Schutzregeln vor jedem Schreibvorgang | **fertig, getestet** – `src/lib/shopify/guards.ts` |
 | Abgleich mit Dry-Run (protokolliert, sendet nichts) | **fertig, getestet** – `src/lib/shopify/sync.ts` |
-| GraphQL-Operationen | vorbereitet – `src/lib/shopify/graphql.ts` |
+| GraphQL-Operationen, API-Version fest `2026-10` | **fertig** – `src/lib/shopify/graphql.ts` |
 | CSV als Übergang, aus denselben Daten erzeugt | **fertig** – `npm run shopify:csv` |
-| Echter HTTP-Transport zur Shopify-API | **bewusst nicht vorhanden** |
+| **Read-only-Connector** (Client-Credentials, nur `read_products`) | **fertig, getestet** – `src/lib/shopify/server/` |
+| Ansicht „Shopify-Synchronisierung“ (Abgleich Shopify ↔ Dashboard) | **fertig** – `/shopify` |
+| Pipeline Analyse → Lieferant → Marge → Compliance → Entwurf | **Dry-Run, getestet** – `src/lib/shopify/pipeline.ts` |
+| Schreibender Transport zur Shopify-API | **bewusst nicht vorhanden** |
 | Sicherheitsschalter `shopifyWriteEnabled` | **aus** (`src/lib/config/budget.ts`) |
 
 Eine einzige Datenquelle: Preise, Kosten und Lieferant kommen aus der Dashboard-Kalkulation
@@ -36,23 +39,22 @@ Ausbauschritt, sobald es eine App gibt (siehe unten).
 
 ## Den CSV-Import ersetzen – Schritt für Schritt
 
-### 1. Custom App im Dev Store (einmalig, durch den Eigentümer)
+### 1. Dev-Dashboard-App (erledigt für Read-only)
 
-- Shopify Dev Dashboard bzw. Admin → Apps → App entwickeln → **App erstellen** (kostenlos).
-- **Minimale Rechte** (Admin API Scopes):
-  `read_products`, `write_products`, `read_inventory`.
-  **Nicht** vergeben: `write_publications`, `write_orders`, `write_draft_orders`, Zahlungsrechte.
-- Access Token **nur** in `.env.local` eintragen (`SHOPIFY_STORE_DOMAIN`, `SHOPIFY_ADMIN_ACCESS_TOKEN`).
-  Niemals ins Repo; `.env.local` ist in `.gitignore`.
+- Einrichtung: [SHOPIFY-API-EINRICHTUNG.md](SHOPIFY-API-EINRICHTUNG.md). Authentifizierung per
+  Client-Credentials-Grant (Client ID + Secret in `.env.local`, Token 24 h, nur im Serverspeicher).
+- Heute: nur `read_products`. Für Entwürfe kommt **nach Freigabe** `write_products` hinzu (neue App-Version
+  releasen, auf dem Store bestätigen). **Nie** vergeben: `write_publications`, `write_orders`,
+  `write_draft_orders`, Zahlungsrechte.
 
-### 2. HTTP-Transport ergänzen (Code-Änderung mit Review)
+### 2. Schreibenden Transport ergänzen (Code-Änderung mit Review, erst nach Freigabe)
 
-- Neue Datei `src/lib/shopify/http-transport.ts`, implementiert `ShopifyAdminTransport`:
-  `POST https://{store}/admin/api/{SHOPIFY_ADMIN_API_VERSION}/graphql.json` mit Header
-  `X-Shopify-Access-Token`, Antwort auf `userErrors` prüfen, Rate-Limits (`extensions.cost`) beachten.
-- Nur serverseitig verwenden (Server Action oder Route Handler, nie im Browser).
-- `src/lib/guards/safety.test.ts` bewusst anpassen: Der Test verbietet heute `fetch` und `process.env`
-  im Code – die Ausnahme gilt dann genau für diese eine Datei.
+- Neue Datei `src/lib/shopify/server/write-transport.ts`, implementiert `ShopifyAdminTransport` und
+  nutzt denselben Token-Abruf (`server/auth.ts`). Antwort auf `userErrors` prüfen, Rate-Limits beachten.
+- Der Read-only-Client bleibt unverändert und lehnt Mutationen weiter ab; Schreiben ist ein eigener Weg.
+- Auslösen nur serverseitig und nur hinter einem Login (Server Action) – nie öffentlich erreichbar.
+- `src/lib/guards/safety.test.ts` bewusst erweitern: Netzwerkzugriff ist heute nur in `server/auth.ts` und
+  `server/admin-client.ts` erlaubt; die neue Datei wird dort explizit eingetragen.
 - `SAFETY_SWITCHES.shopifyWriteEnabled` auf `true` – als eigener, reviewter Commit.
 
 ### 3. Produktanlage durch den Store Manager Agent
