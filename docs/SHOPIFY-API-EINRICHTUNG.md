@@ -77,8 +77,12 @@ angelegt wurde, erfüllt das. Sonst schlägt die Token-Anfrage mit HTTP 400/401 
 ## 5. read_inventory genehmigen (freigegeben)
 
 Damit liest die Kontrollzentrale zusätzlich den **Shopify-Bestand je Standort** (verfügbar, vorhanden,
-reserviert, im Zulauf), die **Bestandsverfolgung** und die **„Kosten pro Artikel“**. Standortnamen sind
-mit `read_inventory` lesbar – `read_locations` ist **nicht** nötig. Kosten: keine.
+reserviert, im Zulauf), die **Bestandsverfolgung** und die **„Kosten pro Artikel“**. Kosten: keine.
+
+> **Standortnamen:** Shopify gibt `name` und `isActive` eines Standorts nur mit zusätzlich
+> `read_locations` heraus (live geprüft am 31.10.2026). Dieses Recht ist **nicht** freigegeben. Die
+> Kontrollzentrale fragt deshalb nur die Standort-ID ab und zeigt Standorte als „Standort 12345“.
+> Die ID findest du im Admin unter Einstellungen → Standorte in der Adresszeile (`…/locations/12345`).
 
 **Ausgangslage prüfen:** <http://localhost:3000/shopify> zeigt in der Karte **Shopify-Bestand** den
 gelben Hinweis „Berechtigung read_inventory fehlt“ und unter **Verbindung → Berechtigungen** nur `read_products`.
@@ -86,6 +90,8 @@ gelben Hinweis „Berechtigung read_inventory fehlt“ und unter **Verbindung �
 ### 5.1 Neue App-Version im Dev Dashboard
 
 1. <https://dev.shopify.com> öffnen und anmelden (gleiche Organisation wie der Store **yakru**).
+   Oben muss **Dev Dashboard** stehen – nicht „dev docs“ (shopify.dev, Dokumentation) und nicht der
+   öffentliche **Shopify App Store** (apps.shopify.com). Dort ist die App nicht zu finden.
 2. Links **Apps** → die App **AI Commerce Kontrollzentrale (read-only)** anklicken.
 3. Reiter **Versions** → **Create a version** (bzw. **Create version**).
 4. Im Formular:
@@ -109,9 +115,15 @@ Neue Rechte gelten erst, wenn der Store sie bestätigt hat.
 3. Erscheint ein Hinweis wie „Diese App benötigt neue Berechtigungen“ / **Update** bzw.
    **Berechtigungen überprüfen**: öffnen und prüfen, dass zusätzlich **nur „Inventar lesen“**
    (Inventory, read) angefragt wird → **Update/Genehmigen**.
-4. Erscheint kein Hinweis: im Dev Dashboard in der App die Karte **Installs** öffnen → beim Store
-   **yakru** auf **Update** bzw. die App erneut installieren (**Install app** → yakru). Shopify zeigt
-   dann die Rechte „Produkte lesen“ und „Inventar lesen“ zur Bestätigung.
+4. Erscheint kein Hinweis (so am 31.10.2026: Unter „Activity and permissions“ stand weiter nur
+   **Products**, und **Open app** zeigte nur „Find this app in the pages where you work“), dann neu
+   installieren – unbedenklich, die App speichert nichts im Store, Client ID/Secret bleiben gültig:
+   1. Auf der App-Seite im Store-Admin oben rechts **Uninstall app** → bestätigen.
+   2. Dev Dashboard → **Apps** → **AI Commerce Kontrollzentrale** → Karte **Installs** → **Install app** → **yakru**.
+   3. Rechteabfrage prüfen: nur Produkte und Inventar *ansehen* → **Install**. Danach zeigt Shopify
+      wieder „Find this app in the pages where you work“ – das ist die normale Startseite.
+5. **Kontrolle im Store-Admin:** App-Seite → „Activity and permissions“ zeigt **Products** und
+   **Inventory**, jeweils ✓ bei *View* und „–“ bei *Edit*.
 
 **Abbrechen, wenn** in der Rechteabfrage etwas anderes als Produkte/Inventar *lesen* steht – dann
 die App-Version korrigieren. Die Kontrollzentrale würde die Verbindung ohnehin ablehnen.
@@ -123,7 +135,7 @@ die App-Version korrigieren. Die Kontrollzentrale würde die Verbindung ohnehin 
 2. <http://localhost:3000/shopify> neu laden. Erwartet:
    - **Verbindung → Berechtigungen:** `read_products, read_inventory`
    - **Letzte erfolgreiche Synchronisierung → Bestand:** aktuelle Uhrzeit
-   - **Shopify-Bestand:** Standort(e) des Stores (z. B. die Shop-Adresse) mit Mengen, darunter alle
+   - **Shopify-Bestand:** Standort(e) des Stores als „Standort &lt;ID&gt;“ mit Mengen, darunter alle
      Demo-Varianten mit Bestand **0**, „verfolgt“ und dem Hinweis **Demo · gesperrt**
    - **Abgleich:** der grüne Hinweis „Bestand, Bestandsverfolgung und Kosten pro Artikel werden
      mitgeprüft (read_inventory)“. Die Felder „Bestand verfolgt …“, „Bestand …“ und „Kosten …“

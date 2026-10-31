@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { SHOPIFY_ADMIN_API_VERSION } from "../graphql";
+import { INVENTORY_ITEMS_QUERY, SHOPIFY_ADMIN_API_VERSION } from "../graphql";
 import { assertReadOnlyDocument, createReadOnlyAdminClient } from "./admin-client";
 import { clearTokenCache, getAccessToken, type FetchLike } from "./auth";
 import { isLocalDevelopment, readShopifyConfig, type ShopifyCredentials } from "./config";
@@ -163,8 +163,9 @@ describe("Read-only-Admin-Client", () => {
 });
 
 describe("Produkte und Bestand lesen", () => {
-  const level = (id: string, name: string, available: number, onHand = available) => ({
-    location: { id, name, isActive: true },
+  // Shopify liefert vom Standort nur die ID (Name und Aktiv-Status bräuchten read_locations).
+  const level = (id: string, available: number, onHand = available) => ({
+    location: { id },
     quantities: [
       { name: "available", quantity: available },
       { name: "on_hand", quantity: onHand },
@@ -197,7 +198,7 @@ describe("Produkte und Bestand lesen", () => {
       id: "item-1",
       tracked: true,
       unitCost: { amount: "4.5" },
-      inventoryLevels: { pageInfo: { hasNextPage: false }, nodes: [level("loc-a", "Lager A", 7, 9), level("loc-b", "Lager B", 3)] },
+      inventoryLevels: { pageInfo: { hasNextPage: false }, nodes: [level("gid://shopify/Location/111", 7, 9), level("gid://shopify/Location/222", 3)] },
     },
     "item-2": { id: "item-2", tracked: false, unitCost: null, inventoryLevels: { pageInfo: { hasNextPage: true }, nodes: [] } },
   };
@@ -228,11 +229,16 @@ describe("Produkte und Bestand lesen", () => {
       unitCost: "4.50",
       locationsTruncated: false,
       locations: [
-        { locationId: "loc-a", locationName: "Lager A", locationActive: true, available: 7, onHand: 9, committed: 2, incoming: 0 },
-        { locationId: "loc-b", locationName: "Lager B", locationActive: true, available: 3, onHand: 3, committed: 0, incoming: 0 },
+        { locationId: "gid://shopify/Location/111", locationName: "Standort 111", locationActive: null, available: 7, onHand: 9, committed: 2, incoming: 0 },
+        { locationId: "gid://shopify/Location/222", locationName: "Standort 222", locationActive: null, available: 3, onHand: 3, committed: 0, incoming: 0 },
       ],
     });
     expect(white.inventory).toMatchObject({ tracked: false, quantity: null, unitCost: null, locationsTruncated: true });
+  });
+
+  it("fragt vom Standort nur die ID ab – Name und Aktiv-Status bräuchten read_locations", () => {
+    const location = INVENTORY_ITEMS_QUERY.match(/location\s*\{([^}]*)\}/)?.[1].trim().split(/\s+/);
+    expect(location).toEqual(["id"]);
   });
 
   it("fragt genau die Lagerartikel der gelesenen Varianten ab, in Paketen von 25", async () => {

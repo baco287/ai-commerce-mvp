@@ -11,7 +11,7 @@ const credentials = { storeDomain: "yakru.myshopify.com", clientId: "test-client
 const NOW = new Date("2026-10-31T10:00:00.000Z");
 
 const level = (id: string, available: number) => ({
-  location: { id, name: `Lager ${id}`, isActive: true },
+  location: { id },
   quantities: [
     { name: "available", quantity: available },
     { name: "on_hand", quantity: available },

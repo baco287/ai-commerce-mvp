@@ -83,7 +83,25 @@ describe("Bestandsübersicht", () => {
 
   it("kennzeichnet Demo-Produkte, deren Bestand 0 beabsichtigt ist", () => {
     const demo = summarizeInventory(products).rows.find((r) => r.sku === "DEMO-LED");
-    expect(demo).toMatchObject({ demo: true, state: "out", available: 0 });
+    expect(demo).toMatchObject({ demo: true, state: "out", available: 0, demoLockBroken: false });
+  });
+
+  it("meldet eine unwirksame Kaufsperre bei Demo-Varianten (nicht verfolgt, Bestand > 0, Weiterverkauf)", () => {
+    const demo = (variant: { sku: string; tracked?: boolean; locations?: LocationQuantity[] }) =>
+      product(`demo-${variant.sku.toLowerCase()}`, [variant], ["ai-commerce-demo"]);
+    const untracked = demo({ sku: "U", tracked: false, locations: [loc("a", 0)] });
+    const stocked = demo({ sku: "S", locations: [loc("a", 2)] });
+    const continueSelling = demo({ sku: "C", locations: [loc("a", 0)] });
+    continueSelling.variants[0].inventoryPolicy = "CONTINUE";
+    const normal = product("lampe", [{ sku: "L", tracked: false }]);
+
+    const rows = summarizeInventory([untracked, stocked, continueSelling, normal]).rows;
+    expect(rows.map((r) => [r.sku, r.demoLockBroken])).toEqual([
+      ["U", true],
+      ["S", true],
+      ["C", true],
+      ["L", false],
+    ]);
   });
 
   it("gibt jeder Zeile die Varianten-ID als eindeutigen Schlüssel – auch bei gleicher oder leerer SKU", () => {

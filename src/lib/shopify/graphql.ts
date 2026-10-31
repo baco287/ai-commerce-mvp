@@ -60,6 +60,9 @@ export const INVENTORY_ITEMS_PER_QUERY = 25;
  * Fragt gezielt die Lagerartikel der gelesenen Varianten ab (IDs aus PRODUCTS_QUERY) statt aller
  * Lagerartikel des Shops – so passt der Bestand immer genau zu den Produkten. InventoryItem.variant
  * ist veraltet, daher die Zuordnung über die ID. Unbekannte IDs liefert Shopify als null.
+ *
+ * Vom Standort nur die ID: `name` und `isActive` verlangen live zusätzlich read_locations (Stand
+ * 31.10.2026, entgegen der Objektbeschreibung). Standorte werden daher über ihre ID gekennzeichnet.
  */
 export const INVENTORY_ITEMS_QUERY = /* GraphQL */ `
   query AiCommerceInventoryItems($ids: [ID!]!) {
@@ -77,8 +80,6 @@ export const INVENTORY_ITEMS_QUERY = /* GraphQL */ `
           nodes {
             location {
               id
-              name
-              isActive
             }
             quantities(names: ${JSON.stringify(INVENTORY_QUANTITY_NAMES)}) {
               name

@@ -8,7 +8,8 @@ import type { ProductSetInput } from "./product-input";
 export interface LocationQuantity {
   locationId: string;
   locationName: string;
-  locationActive: boolean;
+  /** null = unbekannt (nur mit read_locations lesbar, nicht freigegeben) */
+  locationActive: boolean | null;
   /** verkaufbar */
   available: number;
   /** physisch vorhanden (inkl. reserviert) */
