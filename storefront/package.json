@@ -8,9 +8,11 @@
     "validate:products": "node scripts/validate-products-csv.mjs",
     "check": "npm run validate && npm run validate:products && shopify theme check --fail-level error",
     "dev": "shopify theme dev",
-    "list": "shopify theme list"
+    "list": "shopify theme list",
+    "images": "node scripts/render-product-images.mjs"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@shopify/cli": "^4.9.4"
   }
 }

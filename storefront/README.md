@@ -16,6 +16,7 @@ Kundenshop als echtes Shopify-Liquid-Theme. Basis: **Shopify Dawn 16.0.0** (kost
 
 ```bash
 npm install                      # lokale Shopify CLI installieren
+npm run images                   # Produkt-Illustrationen (PNG) und Hero-Grafik neu erzeugen
 npm run validate                 # Einstellungswerte gegen die Schemas prüfen
 npm run validate:products        # Import-Datei data/demo-products.csv prüfen
 npm run check                    # alle Prüfungen + Shopify Theme Check (bricht nur bei Fehlern ab)
@@ -50,7 +51,7 @@ storefront/
   sections/header-group.json      Demo-Hinweisleiste + dunkelblaue Navigation
   sections/footer-group.json      Footer (Anthrazit) mit Platzhaltern für Rechtliches
   snippets/ai-product-facts.liquid  Demo-Status, Lieferzeit (aus Metafeldern), Versandhinweis; blendet Kauf-Buttons bei Demo-Produkten aus
-  templates/index.json            Startseite: Hero, Kategorien, ausgewählte Produkte, Über-uns
+  templates/index.json            Startseite: Hero, Kategorien, ausgewählte Produkte, „Warum Yakaru“
   templates/collection.json       Produktübersicht mit Filtern (Seitenleiste) und Sortierung
   templates/product.json          Produktseite: Bilder, Preis, Varianten, Lieferinfos, Warenkorb
   templates/cart.json             Warenkorb mit Demo-Hinweis
@@ -81,11 +82,26 @@ Dawn-Liquid-Code ist bis auf zwei kleine, mit „AI Commerce“ kommentierte Ste
 Schriften: Montserrat (Überschriften), Lato (Text). Keine Scroll-Animationen, abgerundete Ecken (6–8 px).
 Alles ist im Theme-Editor anpassbar (Onlineshop → Themes → Anpassen → Theme-Einstellungen).
 
+### Marke Yakaru
+
+- **Logo:** Bildzeichen + Schriftzug als Vektorgrafik in `snippets/ai-brand-logo.liquid`
+  (Markenname dort in **einer** Zeile änderbar). Favicon: `assets/yakaru-favicon.svg`.
+- **Startseite:** `sections/ai-hero.liquid` (Hero mit Illustration `assets/yakaru-hero.svg`),
+  `sections/ai-category-grid.liquid` (Kategorie-Kacheln mit Symbolen), `sections/ai-values.liquid`
+  („Warum Yakaru“ – bewusst ohne Garantien, Lieferzusagen, Bewertungen oder Siegel). Alle Texte sind im
+  Theme-Editor änderbar.
+- **Produktbilder:** Illustrationen in `data/images/` (PNG für Shopify, SVG-Quelle daneben), erzeugt mit
+  `npm run images` aus `scripts/product-art.mjs`. Jedes Bild trägt „Illustration · Symbolbild“; die
+  Produktseite weist bei Demo-Produkten zusätzlich darauf hin.
+- **Store-Name:** Im Shopify-Admin unter Einstellungen → Store-Details auf „Yakaru“ ändern, damit auch
+  Seitentitel, E-Mails und Checkout den Namen zeigen.
+
 ### Markenname und Logo austauschen
 
-- **Name:** Shopify-Admin → Einstellungen → Store-Details → Store-Name. Die Navigation zeigt ihn automatisch.
-- **Logo:** Theme-Editor → Header → Logo hochladen (Breite unter Theme-Einstellungen → Logo).
-- Die Texte im Theme nennen bewusst keinen Markennamen.
+- **Schriftzug in der Navigation:** `assign brand_name` in `snippets/ai-brand-logo.liquid`.
+- **Store-Name** (Seitentitel, E-Mails, Checkout): Shopify-Admin → Einstellungen → Store-Details.
+- **Eigenes Logo:** Theme-Editor → Header → Logo hochladen; es ersetzt dann das Vektor-Logo.
+- **Texte der Startseite** („Yakaru“, „Warum Yakaru“): im Theme-Editor in den jeweiligen Sections.
 
 ## Dev Store einrichten (einmalig, durch dich)
 

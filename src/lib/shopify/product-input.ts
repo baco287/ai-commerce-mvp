@@ -4,7 +4,7 @@
 // Feldnamen entsprechen dem Admin-GraphQL-Typ `ProductSetInput` (nur die genutzte Teilmenge).
 
 import type { ProductAnalysis } from "@/lib/data";
-import { DEMO_MARKERS, DEMO_NOTICE_HTML, type ProductListing } from "./listings";
+import { DEMO_MARKERS, DEMO_NOTICE_HTML, demoImageUrl, type ProductListing } from "./listings";
 
 export type ProductStatus = "DRAFT" | "ACTIVE" | "ARCHIVED";
 
@@ -34,6 +34,8 @@ export interface ProductSetInput {
   productOptions: { name: string; position: number; values: { name: string }[] }[];
   variants: VariantInput[];
   metafields: MetafieldInput[];
+  /** Produktbilder; Shopify lädt sie von der öffentlichen Adresse */
+  files: { originalSource: string; alt: string; contentType: "IMAGE" }[];
 }
 
 /** Shopify-Konvention für Produkte ohne Varianten */
@@ -82,6 +84,7 @@ export function buildProductSetInput(analysis: ProductAnalysis, listing: Product
       },
       taxable: true,
     })),
+    files: [{ originalSource: demoImageUrl(listing.handle), alt: listing.imageAlt, contentType: "IMAGE" }],
     metafields: [
       { namespace: "ai_commerce", key: "dashboard_product_id", type: "single_line_text_field", value: analysis.product.id },
       ...(best

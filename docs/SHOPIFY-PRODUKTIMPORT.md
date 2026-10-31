@@ -128,6 +128,23 @@ Auch aktiviert bleiben Demo-Produkte **unverkäuflich**: Der Bestand ist 0 und �
 Shopify selbst lehnt Warenkorb und Checkout ab. Das Theme zeigt „Demo – nicht bestellbar“ statt
 „Ausverkauft“ und blendet die Kauf-Buttons aus.
 
+## Teil H – Produktbilder (Illustrationen) übernehmen
+
+Die Import-Datei enthält je Produkt ein Bild: eine Yakaru-Illustration, gekennzeichnet als
+**Symbolbild** (im Bild, im Alt-Text und auf der Produktseite). Shopify lädt die Bilder beim Import von
+`https://raw.githubusercontent.com/baco287/ai-commerce-mvp/main/storefront/data/images/…`.
+
+1. Voraussetzung: Die Bilder sind auf GitHub (nach dem Commit und Push dieses Stands).
+   Kontrolle: Diese Adresse muss im Browser ein Bild zeigen:
+   <https://raw.githubusercontent.com/baco287/ai-commerce-mvp/main/storefront/data/images/demo-laptopstaender.png>
+2. Produkte → **Importieren** → `storefront/data/demo-products.csv` →
+   **„Vorhandene Produkte mit demselben Handle überschreiben“ anhaken** (betrifft nur die `demo-…`-Produkte).
+3. Vorschau prüfen (Status Entwurf, Preis in €) → **Produkte importieren**.
+4. Kontrolle in der Kontrollzentrale unter <http://localhost:3000/shopify>: alle 5 Produkte „übereinstimmend“
+   (vorher: „Produktbild fehlt“).
+
+Bilder neu zeichnen: `cd storefront && npm run images` (Quelle: `scripts/product-art.mjs`).
+
 ## Teil G – Bereits importierte Demo-Produkte aktualisieren
 
 Falls du die Produkte schon mit einer früheren Version der Datei importiert hast, fehlt dort die

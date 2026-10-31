@@ -25,6 +25,9 @@ export const CSV_COLUMNS = [
   "Continue selling when out of stock",
   "Requires shipping",
   "Fulfillment service",
+  "Product image URL",
+  "Image position",
+  "Image alt text",
   "Gift card",
 ] as const;
 
@@ -64,6 +67,9 @@ export function toShopifyCsv(inputs: ProductSetInput[]): string {
           "Published on online store": "false",
           Status: p.status.toLowerCase(),
           "Gift card": "false",
+          "Product image URL": p.files[0]?.originalSource,
+          "Image position": p.files[0] ? "1" : undefined,
+          "Image alt text": p.files[0]?.alt,
         });
       }
       lines.push(CSV_COLUMNS.map((c) => cell(row[c])).join(","));

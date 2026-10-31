@@ -45,9 +45,36 @@ export const SHOP_INFO_QUERY = /* GraphQL */ `
 `;
 
 /**
- * Produkte mit Varianten und Preisen (nur Felder, die mit read_products lesbar sind).
- * Kosten pro Artikel und Bestände bräuchten read_inventory und werden bewusst nicht gelesen.
+ * Bestand, Bestandsverfolgung und „Kosten pro Artikel“ je Variante. Braucht read_inventory und wird
+ * nur abgefragt, wenn die App dieses Recht tatsächlich hat (sonst bleibt der Abgleich ohne Bestand).
  */
+export const INVENTORY_QUERY = /* GraphQL */ `
+  query AiCommerceInventory($first: Int!, $after: String) {
+    products(first: $first, after: $after, sortKey: TITLE) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        id
+        variants(first: 100) {
+          nodes {
+            id
+            inventoryQuantity
+            inventoryItem {
+              tracked
+              unitCost {
+                amount
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+/** Produkte mit Varianten und Preisen (nur Felder, die mit read_products lesbar sind). */
 export const PRODUCTS_QUERY = /* GraphQL */ `
   query AiCommerceProducts($first: Int!, $after: String) {
     products(first: $first, after: $after, sortKey: TITLE) {
@@ -63,6 +90,9 @@ export const PRODUCTS_QUERY = /* GraphQL */ `
         vendor
         productType
         tags
+        featuredMedia {
+          id
+        }
         variants(first: 100) {
           nodes {
             id

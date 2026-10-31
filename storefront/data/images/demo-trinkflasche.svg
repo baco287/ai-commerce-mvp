@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1200" width="1200" height="1200">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F6F9FC"/>
+      <stop offset="1" stop-color="#E3EAF3"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#4FB3C8" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#4FB3C8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#E4E9F0"/>
+      <stop offset="0.55" stop-color="#C9D2DD"/>
+      <stop offset="1" stop-color="#9AA6B5"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="1200" fill="url(#bg)"/>
+  
+  <ellipse cx="600" cy="985" rx="400" ry="38" fill="#14233C" opacity="0.07"/>
+  
+  <g>
+    <rect x="308.3" y="500" width="163.4" height="430" rx="61.9" fill="#F7F9FB" stroke="#D3DCE7" stroke-width="5"/>
+    <rect x="330.7" y="551.6" width="18.9" height="318.2" rx="9.5" fill="#FFFFFF" opacity="0.28"/>
+    <rect x="308.3" y="560.2" width="163.4" height="8.6" fill="#14233C" opacity="0.08"/>
+    <rect x="340.1" y="458.7" width="99.8" height="51.6" rx="12" fill="url(#metal)"/>
+    <rect x="333.2" y="389.9" width="113.5" height="75.7" rx="22.4" fill="#14233C"/>
+    <path d="M364.2 391.6 Q390 328 415.8 391.6" fill="none" stroke="#14233C" stroke-width="13.8" stroke-linecap="round"/>
+    <rect x="355.6" y="414" width="68.8" height="8.6" rx="4.3" fill="#4FB3C8"/>
+  </g>
+  <g>
+    <rect x="728.3" y="500" width="163.4" height="430" rx="61.9" fill="#9DB8A0" stroke="#86A08A" stroke-width="5"/>
+    <rect x="750.7" y="551.6" width="18.9" height="318.2" rx="9.5" fill="#FFFFFF" opacity="0.28"/>
+    <rect x="728.3" y="560.2" width="163.4" height="8.6" fill="#14233C" opacity="0.08"/>
+    <rect x="760.1" y="458.7" width="99.8" height="51.6" rx="12" fill="url(#metal)"/>
+    <rect x="753.2" y="389.9" width="113.5" height="75.7" rx="22.4" fill="#14233C"/>
+    <path d="M784.2 391.6 Q810 328 835.8 391.6" fill="none" stroke="#14233C" stroke-width="13.8" stroke-linecap="round"/>
+    <rect x="775.6" y="414" width="68.8" height="8.6" rx="4.3" fill="#4FB3C8"/>
+  </g>
+  <g>
+    <rect x="505" y="460" width="190" height="500" rx="72" fill="#262B33" stroke="#1B1F25" stroke-width="5"/>
+    <rect x="531" y="520" width="22" height="370" rx="11" fill="#FFFFFF" opacity="0.28"/>
+    <rect x="505" y="530" width="190" height="10" fill="#14233C" opacity="0.08"/>
+    <rect x="542" y="412" width="116" height="60" rx="14" fill="url(#metal)"/>
+    <rect x="534" y="332" width="132" height="88" rx="26" fill="#14233C"/>
+    <path d="M570 334 Q600 260 630 334" fill="none" stroke="#14233C" stroke-width="16" stroke-linecap="round"/>
+    <rect x="560" y="360" width="80" height="10" rx="5" fill="#4FB3C8"/>
+  </g>
+  <text x="1150" y="1160" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="24" fill="#7A869A">Illustration · Symbolbild</text>
+</svg>

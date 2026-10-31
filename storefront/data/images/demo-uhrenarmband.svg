@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1200" width="1200" height="1200">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F6F9FC"/>
+      <stop offset="1" stop-color="#E3EAF3"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#4FB3C8" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#4FB3C8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#E4E9F0"/>
+      <stop offset="0.55" stop-color="#C9D2DD"/>
+      <stop offset="1" stop-color="#9AA6B5"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="1200" fill="url(#bg)"/>
+  
+  <ellipse cx="600" cy="985" rx="400" ry="38" fill="#14233C" opacity="0.07"/>
+  
+  <g transform="rotate(-20 600 420)">
+    <rect x="220" y="364" width="760" height="112" rx="56" fill="#1E3A5F" stroke="#14233C" stroke-width="5"/>
+    <rect x="260" y="380" width="540" height="10" rx="5" fill="#FFFFFF" opacity="0.25"/>
+    <circle cx="340" cy="420" r="9" fill="#14233C" opacity="0.55"/><circle cx="392" cy="420" r="9" fill="#14233C" opacity="0.55"/><circle cx="444" cy="420" r="9" fill="#14233C" opacity="0.55"/><circle cx="496" cy="420" r="9" fill="#14233C" opacity="0.55"/><circle cx="548" cy="420" r="9" fill="#14233C" opacity="0.55"/><circle cx="600" cy="420" r="9" fill="#14233C" opacity="0.55"/><circle cx="652" cy="420" r="9" fill="#14233C" opacity="0.55"/>
+    <rect x="860" y="350" width="96" height="140" rx="20" fill="none" stroke="url(#metal)" stroke-width="14"/>
+       <path d="M908 420 H830" stroke="#9AA6B5" stroke-width="10" stroke-linecap="round"/>
+  </g>
+  <g transform="rotate(-20 600 600)">
+    <rect x="220" y="544" width="760" height="112" rx="56" fill="#4FB3C8" stroke="#3A98AC" stroke-width="5"/>
+    <rect x="260" y="560" width="540" height="10" rx="5" fill="#FFFFFF" opacity="0.25"/>
+    <circle cx="340" cy="600" r="9" fill="#3A98AC" opacity="0.55"/><circle cx="392" cy="600" r="9" fill="#3A98AC" opacity="0.55"/><circle cx="444" cy="600" r="9" fill="#3A98AC" opacity="0.55"/><circle cx="496" cy="600" r="9" fill="#3A98AC" opacity="0.55"/><circle cx="548" cy="600" r="9" fill="#3A98AC" opacity="0.55"/><circle cx="600" cy="600" r="9" fill="#3A98AC" opacity="0.55"/><circle cx="652" cy="600" r="9" fill="#3A98AC" opacity="0.55"/>
+    <rect x="860" y="530" width="96" height="140" rx="20" fill="none" stroke="url(#metal)" stroke-width="14"/>
+       <path d="M908 600 H830" stroke="#9AA6B5" stroke-width="10" stroke-linecap="round"/>
+  </g>
+  <g transform="rotate(-20 600 780)">
+    <rect x="220" y="724" width="760" height="112" rx="56" fill="#E9D9C0" stroke="#D2BE9F" stroke-width="5"/>
+    <rect x="260" y="740" width="540" height="10" rx="5" fill="#FFFFFF" opacity="0.25"/>
+    <circle cx="340" cy="780" r="9" fill="#D2BE9F" opacity="0.55"/><circle cx="392" cy="780" r="9" fill="#D2BE9F" opacity="0.55"/><circle cx="444" cy="780" r="9" fill="#D2BE9F" opacity="0.55"/><circle cx="496" cy="780" r="9" fill="#D2BE9F" opacity="0.55"/><circle cx="548" cy="780" r="9" fill="#D2BE9F" opacity="0.55"/><circle cx="600" cy="780" r="9" fill="#D2BE9F" opacity="0.55"/><circle cx="652" cy="780" r="9" fill="#D2BE9F" opacity="0.55"/>
+    <rect x="860" y="710" width="96" height="140" rx="20" fill="none" stroke="url(#metal)" stroke-width="14"/>
+       <path d="M908 780 H830" stroke="#9AA6B5" stroke-width="10" stroke-linecap="round"/>
+  </g>
+  <text x="1150" y="1160" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="24" fill="#7A869A">Illustration · Symbolbild</text>
+</svg>

@@ -1,167 +1,111 @@
 {
   "sections": {
     "hero": {
-      "type": "image-banner",
-      "blocks": {
-        "heading": {
-          "type": "heading",
-          "settings": {
-            "heading": "Durchdachte Produkte für jeden Tag",
-            "heading_size": "h0"
-          }
-        },
-        "text": {
-          "type": "text",
-          "settings": {
-            "text": "Ausgewählte Produkte für Zuhause, Büro und unterwegs.",
-            "text_style": "body"
-          }
-        },
-        "buttons": {
-          "type": "buttons",
-          "settings": {
-            "button_label_1": "Alle Produkte",
-            "button_link_1": "shopify://collections/all",
-            "button_style_secondary_1": false,
-            "button_label_2": "Kategorien",
-            "button_link_2": "shopify://collections",
-            "button_style_secondary_2": true
-          }
-        }
-      },
-      "block_order": [
-        "heading",
-        "text",
-        "buttons"
-      ],
+      "type": "ai-hero",
       "settings": {
-        "image_overlay_opacity": 30,
-        "image_height": "medium",
-        "desktop_content_position": "middle-left",
-        "show_text_box": false,
-        "image_behavior": "none",
-        "desktop_content_alignment": "left",
-        "color_scheme": "scheme-3",
-        "mobile_content_alignment": "left",
-        "stack_images_on_mobile": false,
-        "show_text_below": true
+        "eyebrow": "Yakaru",
+        "heading": "Durchdachte Produkte für jeden Tag",
+        "text": "<p>Ausgewählte Produkte für Zuhause, Büro und unterwegs – mit klaren Preisen und verständlichen Produktinformationen.</p>",
+        "button_label_1": "Alle Produkte",
+        "button_link_1": "shopify://collections/all",
+        "button_label_2": "Kategorien",
+        "button_link_2": "",
+        "color_scheme": "scheme-3"
       }
     },
     "categories": {
-      "type": "collection-list",
+      "type": "ai-category-grid",
       "blocks": {
-        "category_1": {
-          "type": "featured_collection",
+        "light": {
+          "type": "category",
           "settings": {
-            "collection": "wohnen-licht"
+            "label": "Wohnen & Licht",
+            "collection_handle": "wohnen-licht",
+            "icon": "light"
           }
         },
-        "category_2": {
-          "type": "featured_collection",
+        "office": {
+          "type": "category",
           "settings": {
-            "collection": "buero-homeoffice"
+            "label": "Büro & Homeoffice",
+            "collection_handle": "buero-homeoffice",
+            "icon": "office"
           }
         },
-        "category_3": {
-          "type": "featured_collection",
+        "kitchen": {
+          "type": "category",
           "settings": {
-            "collection": "kueche-outdoor"
+            "label": "Küche & Outdoor",
+            "collection_handle": "kueche-outdoor",
+            "icon": "kitchen"
           }
         },
-        "category_4": {
-          "type": "featured_collection",
+        "accessories": {
+          "type": "category",
           "settings": {
-            "collection": "zubehoer"
+            "label": "Zubehör",
+            "collection_handle": "zubehoer",
+            "icon": "accessory"
           }
         }
       },
       "block_order": [
-        "category_1",
-        "category_2",
-        "category_3",
-        "category_4"
+        "light",
+        "office",
+        "kitchen",
+        "accessories"
       ],
       "settings": {
         "title": "Kategorien",
-        "heading_size": "h2",
-        "image_ratio": "square",
-        "columns_desktop": 4,
-        "color_scheme": "scheme-1",
-        "show_view_all": false,
-        "columns_mobile": "2",
-        "swipe_on_mobile": false,
+        "color_scheme": "scheme-2",
         "padding_top": 48,
-        "padding_bottom": 24
-      }
-    },
-    "featured_products": {
-      "type": "featured-collection",
-      "settings": {
-        "title": "Ausgewählte Produkte",
-        "heading_size": "h2",
-        "description": "",
-        "show_description": false,
-        "description_style": "body",
-        "collection": "all",
-        "products_to_show": 8,
-        "columns_desktop": 4,
-        "color_scheme": "scheme-1",
-        "full_width": false,
-        "show_view_all": true,
-        "view_all_style": "outline",
-        "enable_desktop_slider": false,
-        "swipe_on_mobile": false,
-        "image_ratio": "square",
-        "image_shape": "default",
-        "show_secondary_image": true,
-        "show_vendor": false,
-        "show_rating": false,
-        "quick_add": "standard",
-        "columns_mobile": "2",
-        "padding_top": 24,
         "padding_bottom": 48
       }
     },
-    "store_info": {
-      "type": "rich-text",
+    "featured_products": {
+      "type": "ai-product-grid",
+      "settings": {
+        "title": "Ausgewählte Produkte",
+        "collection_handle": "",
+        "products_to_show": 8,
+        "empty_title": "Unser Sortiment entsteht gerade",
+        "empty_text": "Die ersten Produkte werden derzeit geprüft und erscheinen hier, sobald sie freigegeben sind.",
+        "color_scheme": "scheme-1"
+      }
+    },
+    "values": {
+      "type": "ai-values",
       "blocks": {
-        "heading": {
-          "type": "heading",
+        "selected": {
+          "type": "value",
           "settings": {
-            "heading": "Über diesen Shop",
-            "heading_size": "h2"
+            "heading": "Sorgfältig ausgewählt",
+            "text": "<p>Bevor ein Produkt in den Shop kommt, prüfen wir Kalkulation, Lieferant sowie Produktsicherheit und Kennzeichnung.</p>"
           }
         },
-        "text": {
-          "type": "text",
+        "clear": {
+          "type": "value",
           "settings": {
-            "text": "<p>Platzhalter: Hier stellt sich die Marke vor, sobald Name und Ausrichtung feststehen. Bitte keine Versprechen zu Lieferzeiten, Qualität oder Garantien ergänzen, die nicht vertraglich abgesichert sind.</p>"
+            "heading": "Klare Informationen",
+            "text": "<p>Preise inklusive Mehrwertsteuer, Hinweise zu Lieferung und Herstellerangaben finden Sie auf jeder Produktseite.</p>"
           }
         },
-        "button": {
-          "type": "button",
+        "contact": {
+          "type": "value",
           "settings": {
-            "button_label": "Kontakt",
-            "button_link": "shopify://pages/kontakt",
-            "button_style_secondary": true,
-            "button_label_2": "",
-            "button_link_2": "",
-            "button_style_secondary_2": false
+            "heading": "Persönlich erreichbar",
+            "text": "<p>Fragen zu Produkten oder Bestellungen? Schreiben Sie uns über das <a href=\"/pages/kontakt\">Kontaktformular</a>.</p>"
           }
         }
       },
       "block_order": [
-        "heading",
-        "text",
-        "button"
+        "selected",
+        "clear",
+        "contact"
       ],
       "settings": {
-        "desktop_content_position": "center",
-        "content_alignment": "center",
-        "color_scheme": "scheme-2",
-        "full_width": true,
-        "padding_top": 48,
-        "padding_bottom": 48
+        "title": "Warum Yakaru",
+        "color_scheme": "scheme-2"
       }
     }
   },
@@ -169,6 +113,6 @@
     "hero",
     "categories",
     "featured_products",
-    "store_info"
+    "values"
   ]
 }

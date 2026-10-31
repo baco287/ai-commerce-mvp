@@ -1,0 +1,162 @@
+{%- comment -%}
+  AI Commerce: Kategorie-Kacheln mit Symbolen (keine Kollektionsbilder nötig).
+  Existiert die Kollektion im Shop noch nicht, führt die Kachel zur Übersicht aller Produkte.
+{%- endcomment -%}
+
+<div class="color-{{ section.settings.color_scheme }} gradient">
+  <div class="page-width ai-cats section-{{ section.id }}-padding">
+    {%- if section.settings.title != blank -%}
+      <h2 class="ai-cats__title h2">{{ section.settings.title }}</h2>
+    {%- endif -%}
+    <ul class="ai-cats__grid" role="list">
+      {%- for block in section.blocks -%}
+        {%- liquid
+          assign ai_collection = collections[block.settings.collection_handle]
+          if ai_collection != blank and ai_collection.id != blank
+            assign href = ai_collection.url
+            assign count = ai_collection.products_count
+          else
+            assign href = routes.all_products_collection_url
+            assign count = nil
+          endif
+        -%}
+        <li {{ block.shopify_attributes }}>
+          <a class="ai-cats__tile" href="{{ href }}">
+            <span class="ai-cats__icon" aria-hidden="true">
+              {%- case block.settings.icon -%}
+                {%- when 'light' -%}
+                  <svg viewBox="0 0 48 48"><path d="M24 6a12 12 0 0 0-7 21.7V32h14v-4.3A12 12 0 0 0 24 6Z"/><path d="M18 37h12M20 42h8"/></svg>
+                {%- when 'office' -%}
+                  <svg viewBox="0 0 48 48"><rect x="9" y="11" width="30" height="19" rx="2.5"/><path d="M5 37h38M20 30l-3 7M28 30l3 7"/></svg>
+                {%- when 'kitchen' -%}
+                  <svg viewBox="0 0 48 48"><path d="M19 6h10v5H19zM17 14h14a3 3 0 0 1 3 3v22a4 4 0 0 1-4 4H18a4 4 0 0 1-4-4V17a3 3 0 0 1 3-3Z"/><path d="M14 24h20"/></svg>
+                {%- else -%}
+                  <svg viewBox="0 0 48 48"><circle cx="16" cy="24" r="7"/><circle cx="32" cy="24" r="7"/><path d="M16 6v11M32 31v11M16 31c0 6 16 0 16-14"/></svg>
+              {%- endcase -%}
+            </span>
+            <span class="ai-cats__name">{{ block.settings.label }}</span>
+            {%- if count != nil -%}
+              <span class="ai-cats__count">{{ count }} {% if count == 1 %}Produkt{% else %}Produkte{% endif %}</span>
+            {%- endif -%}
+          </a>
+        </li>
+      {%- endfor -%}
+    </ul>
+  </div>
+</div>
+
+{%- style -%}
+  .section-{{ section.id }}-padding {
+    padding-top: {{ section.settings.padding_top | times: 0.75 | round: 0 }}px;
+    padding-bottom: {{ section.settings.padding_bottom | times: 0.75 | round: 0 }}px;
+  }
+  @media screen and (min-width: 750px) {
+    .section-{{ section.id }}-padding {
+      padding-top: {{ section.settings.padding_top }}px;
+      padding-bottom: {{ section.settings.padding_bottom }}px;
+    }
+  }
+{%- endstyle -%}
+
+{% stylesheet %}
+  .ai-cats__title {
+    margin: 0 0 2.4rem;
+  }
+  .ai-cats__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.2rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .ai-cats__tile {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
+    height: 100%;
+    padding: 2rem;
+    border-radius: 0.8rem;
+    border: 0.1rem solid rgba(var(--color-foreground), 0.1);
+    background: rgb(var(--color-background));
+    color: rgb(var(--color-foreground));
+    text-decoration: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .ai-cats__tile:hover {
+    border-color: rgba(var(--color-button), 0.5);
+    box-shadow: 0 0.6rem 2rem rgba(var(--color-shadow), 0.08);
+  }
+  .ai-cats__icon {
+    display: grid;
+    place-items: center;
+    width: 5.2rem;
+    height: 5.2rem;
+    margin-bottom: 0.8rem;
+    border-radius: 1.2rem;
+    background: rgba(var(--color-button), 0.08);
+  }
+  .ai-cats__icon svg {
+    width: 3rem;
+    height: 3rem;
+    fill: none;
+    stroke: rgb(var(--color-button));
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .ai-cats__name {
+    font-family: var(--font-heading-family);
+    font-weight: var(--font-heading-weight);
+    font-size: 1.7rem;
+  }
+  .ai-cats__count {
+    font-size: 1.3rem;
+    color: rgba(var(--color-foreground), 0.65);
+  }
+  @media screen and (min-width: 750px) {
+    .ai-cats__grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 1.6rem;
+    }
+  }
+{% endstylesheet %}
+
+{% schema %}
+{
+  "name": "Yakaru Kategorien",
+  "tag": "section",
+  "class": "section",
+  "max_blocks": 8,
+  "settings": [
+    { "type": "text", "id": "title", "label": "Überschrift", "default": "Kategorien" },
+    { "type": "color_scheme", "id": "color_scheme", "label": "Farbschema", "default": "scheme-2" },
+    { "type": "range", "id": "padding_top", "min": 0, "max": 100, "step": 4, "unit": "px", "label": "Abstand oben", "default": 48 },
+    { "type": "range", "id": "padding_bottom", "min": 0, "max": 100, "step": 4, "unit": "px", "label": "Abstand unten", "default": 48 }
+  ],
+  "blocks": [
+    {
+      "type": "category",
+      "name": "Kategorie",
+      "settings": [
+        { "type": "text", "id": "label", "label": "Name", "default": "Kategorie" },
+        { "type": "text", "id": "collection_handle", "label": "Handle der Kollektion", "default": "all" },
+        {
+          "type": "select",
+          "id": "icon",
+          "label": "Symbol",
+          "options": [
+            { "value": "light", "label": "Licht" },
+            { "value": "office", "label": "Büro" },
+            { "value": "kitchen", "label": "Küche" },
+            { "value": "accessory", "label": "Zubehör" }
+          ],
+          "default": "accessory"
+        }
+      ]
+    }
+  ],
+  "presets": [{ "name": "Yakaru Kategorien" }]
+}
+{% endschema %}

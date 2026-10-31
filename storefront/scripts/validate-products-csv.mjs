@@ -1,7 +1,7 @@
 // Prüft data/demo-products.csv vor dem Import in Shopify.
 // Aufruf: npm run validate:products   (im Ordner storefront/)
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 // Die Datei wird aus den Dashboard-Daten erzeugt: im Hauptordner `npm run shopify:csv`.
 const REQUIRED = [
@@ -75,6 +75,12 @@ rows.forEach((r, i) => {
     if (get("Published on online store") !== "false") errors.push(`Zeile ${line}: "Published on online store" muss false sein`);
     if (!get("Tags").split(",").map((t) => t.trim()).includes("ai-commerce-demo")) errors.push(`Zeile ${line}: Tag ai-commerce-demo fehlt`);
     if (!get("Description").includes("Demo-Produkt")) errors.push(`Zeile ${line}: Demo-Hinweis in der Beschreibung fehlt`);
+    // Produktbild: öffentliche Adresse im Repository, lokale Datei vorhanden, als Symbolbild gekennzeichnet
+    const image = get("Product image URL");
+    const expectedUrl = `https://raw.githubusercontent.com/baco287/ai-commerce-mvp/main/storefront/data/images/${handle}.png`;
+    if (image !== expectedUrl) errors.push(`Zeile ${line}: Produktbild-URL "${image}" – erwartet ${expectedUrl}`);
+    if (!existsSync(new URL(`../data/images/${handle}.png`, import.meta.url))) errors.push(`Zeile ${line}: Bilddatei data/images/${handle}.png fehlt (npm run images)`);
+    if (!/Symbolbild/.test(get("Image alt text"))) errors.push(`Zeile ${line}: Alt-Text muss das Bild als Symbolbild kennzeichnen`);
     for (const re of FORBIDDEN_CLAIMS) if (re.test(get("Title") + get("Description"))) errors.push(`Zeile ${line}: unzulässige Aussage (${re})`);
   } else {
     const p = products.get(handle);

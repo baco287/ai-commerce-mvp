@@ -1,8 +1,9 @@
 // Read-only-Client für die Shopify Admin GraphQL API. Nur serverseitig.
 //
 // Schutz in drei Ebenen:
-// 1. App-Rechte im Dev Dashboard: nur read_products.
-// 2. Prüfung der vom Token gemeldeten Rechte: Jede write_-Berechtigung führt zum Abbruch.
+// 1. App-Rechte im Dev Dashboard: read_products (Pflicht) und read_inventory (optional).
+// 2. Prüfung der vom Token gemeldeten Rechte: Jede write_-Berechtigung und jedes nicht vorgesehene
+//    Recht führt zum Abbruch (Prinzip der minimalen Rechte).
 // 3. Prüfung jedes GraphQL-Dokuments: mutation/subscription werden nie gesendet.
 
 import "server-only";
@@ -11,8 +12,10 @@ import { getAccessToken, SHOPIFY_TIMEOUT_MS, type FetchLike } from "./auth";
 import type { ShopifyCredentials } from "./config";
 import { redact, ShopifyConnectionError } from "./redact";
 
-/** Genau diese Rechte sind für die aktuelle Phase vorgesehen. */
-export const ALLOWED_SCOPES = ["read_products"] as const;
+/** Genau diese Rechte sind für die aktuelle Phase vorgesehen. read_inventory ist optional. */
+export const REQUIRED_SCOPES = ["read_products"] as const;
+export const OPTIONAL_SCOPES = ["read_inventory"] as const;
+export const ALLOWED_SCOPES: readonly string[] = [...REQUIRED_SCOPES, ...OPTIONAL_SCOPES];
 
 /** Entfernt Kommentare und Zeichenketten, damit Schlüsselwörter darin nicht stören. */
 function stripGraphQL(document: string): string {
@@ -37,8 +40,17 @@ export function assertReadOnlyScopes(scopes: string[]): void {
       "scope",
     );
   }
-  if (!scopes.includes("read_products")) {
-    throw new ShopifyConnectionError("Der App fehlt die Berechtigung read_products.", "scope");
+  const unexpected = scopes.filter((s) => !ALLOWED_SCOPES.includes(s));
+  if (unexpected.length) {
+    throw new ShopifyConnectionError(
+      `Die App hat nicht vorgesehene Rechte (${unexpected.join(", ")}). Erlaubt sind nur ${ALLOWED_SCOPES.join(", ")}.`,
+      "scope",
+    );
+  }
+  for (const required of REQUIRED_SCOPES) {
+    if (!scopes.includes(required)) {
+      throw new ShopifyConnectionError(`Der App fehlt die Berechtigung ${required}.`, "scope");
+    }
   }
 }
 

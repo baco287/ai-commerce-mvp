@@ -1,0 +1,21 @@
+{%- comment -%}
+  AI Commerce: Marken-Logo „Yakaru“ (Bildzeichen + Schriftzug).
+
+  Markenname ändern: nur `brand_name` unten anpassen. Das Bildzeichen ist eine Vektorgrafik und
+  übernimmt die Farben des Header-Farbschemas. Wird im Shopify-Admin ein Logo-Bild hochgeladen
+  (Theme-Editor → Header → Logo), hat dieses Vorrang.
+
+  Verwendet in: sections/header.liquid (statt reinem Store-Namen)
+{%- endcomment -%}
+
+{%- assign brand_name = 'Yakaru' -%}
+
+<span class="ai-brand">
+  <svg class="ai-brand__mark" viewBox="0 0 40 40" width="34" height="34" aria-hidden="true" focusable="false">
+    <rect x="1" y="1" width="38" height="38" rx="11" fill="#4FB3C8" />
+    <path d="M12 11.5 20 21.5 28 11.5" fill="none" stroke="#14233C" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M20 21.5V29.5" fill="none" stroke="#14233C" stroke-width="4.2" stroke-linecap="round" />
+    <circle cx="29.5" cy="29" r="3" fill="#FFFFFF" />
+  </svg>
+  <span class="ai-brand__name">{{ brand_name }}</span>
+</span>

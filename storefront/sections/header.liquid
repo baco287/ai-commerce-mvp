@@ -205,7 +205,8 @@
             }}
           </div>
         {%- else -%}
-          <span class="h2">{{ shop.name }}</span>
+          {%- comment -%} AI Commerce: Marken-Logo statt Store-Name {%- endcomment -%}
+          {%- render 'ai-brand-logo' -%}
         {%- endif -%}
       </a>
       {%- if request.page_type == 'index' -%}
@@ -248,7 +249,8 @@
             }}
           </div>
         {%- else -%}
-          <span class="h2">{{ shop.name }}</span>
+          {%- comment -%} AI Commerce: Marken-Logo statt Store-Name {%- endcomment -%}
+          {%- render 'ai-brand-logo' -%}
         {%- endif -%}
       </a>
       {%- if request.page_type == 'index' -%}

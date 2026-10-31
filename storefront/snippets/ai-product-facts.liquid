@@ -35,6 +35,9 @@
     <p class="ai-facts__notice">
       <strong>Demo-Produkt.</strong> Dieser Artikel dient nur zur Vorschau und ist nicht zum Verkauf freigegeben.
     </p>
+    {%- if product.media.size > 0 -%}
+      <p class="ai-facts__image-note">Abbildungen: Illustrationen (Symbolbilder), keine Produktfotos.</p>
+    {%- endif -%}
     <style>
       #MainProduct-{{ section.id }} .product-form__buttons,
       #MainProduct-{{ section.id }} .product-form__quantity,

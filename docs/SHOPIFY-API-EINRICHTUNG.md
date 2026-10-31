@@ -8,11 +8,12 @@ Kosten: keine. Dauer: ca. 10 Minuten. Alle Schritte im Browser machst du selbst.
 | Darf | Darf nicht |
 | --- | --- |
 | Shop-Name, Währung und erteilte Rechte lesen | Produkte anlegen, ändern, löschen oder veröffentlichen |
-| Produkte mit Varianten, SKU, Preisen und Status lesen | Bestellungen, Kunden, Zahlungen, Bestände lesen oder ändern |
+| Produkte mit Varianten, SKU, Preisen, Status und Hauptbild lesen | Bestellungen, Kunden oder Zahlungen lesen oder ändern |
+| *mit `read_inventory`:* Bestand und Kosten pro Artikel lesen | Bestände ändern |
 | Mit den Dashboard-Daten vergleichen | Werbung, Apps oder Einstellungen ändern |
 
-**Einzige Berechtigung:** `read_products`. Hat die App irgendein `write_…`-Recht, verweigert die
-Kontrollzentrale die Verbindung. Zusätzlich lehnt der Code jede GraphQL-Mutation ab, bevor sie gesendet wird.
+**Berechtigungen:** `read_products` (Pflicht) und optional `read_inventory`. Hat die App irgendein
+`write_…`-Recht oder ein anderes Recht, verweigert die Kontrollzentrale die Verbindung. Zusätzlich lehnt der Code jede GraphQL-Mutation ab, bevor sie gesendet wird.
 
 ## Voraussetzung
 
@@ -73,6 +74,24 @@ angelegt wurde, erfüllt das. Sonst schlägt die Token-Anfrage mit HTTP 400/401 
    | Der App fehlt die Berechtigung read_products | Scope ergänzen, Version releasen, auf dem Store bestätigen |
    | Im Produktionsbetrieb gesperrt | Seite wurde mit `npm start` statt `npm run dev` aufgerufen – gewollt, solange es keinen Login gibt |
 
+## 5. read_inventory ergänzen (freigegeben)
+
+Damit vergleicht die Kontrollzentrale zusätzlich **Bestand, Bestandsverfolgung und „Kosten pro Artikel“**.
+
+1. <https://dev.shopify.com> → **Apps** → **AI Commerce Kontrollzentrale** → **Versions**.
+2. Neue Version anlegen (**Create version**), bei **Scopes** eintragen: `read_products,read_inventory`
+   (nichts anderes, **kein** `write_products`) → **Release**.
+3. Shopify-Admin von **yakru** öffnen: Die App fragt nach der zusätzlichen Berechtigung → **bestätigen**
+   (ggf. unter Einstellungen → Apps → AI Commerce Kontrollzentrale).
+4. Entwicklungsserver neu starten (das Token wird bis zu 24 h zwischengespeichert; ein Neustart holt
+   sofort ein neues mit den aktuellen Rechten) und <http://localhost:3000/shopify> neu laden.
+5. Erwartet: Berechtigungen `read_products, read_inventory` und der Hinweis
+   „Bestand, Bestandsverfolgung und Kosten pro Artikel werden mitgeprüft“. Bei Demo-Produkten muss
+   der Bestand **0** sein, die Bestandsverfolgung **an** und die Kosten wie in der Kontrollzentrale.
+
+Jedes andere Recht (z. B. `read_orders` oder ein `write_…`-Recht) lässt die Kontrollzentrale die
+Verbindung bewusst ablehnen.
+
 ## Sicherheit im Überblick
 
 - **Nur serverseitig:** Token-Abruf und API-Aufrufe laufen ausschließlich im Next.js-Server
@@ -91,7 +110,7 @@ angelegt wurde, erfüllt das. Sonst schlägt die Token-Anfrage mit HTTP 400/401 
 
 | Recht | Wofür | Phase |
 | --- | --- | --- |
-| `read_inventory` | Bestand und „Kosten pro Artikel“ im Abgleich anzeigen | optional, nächster Schritt |
+| `read_inventory` | Bestand und „Kosten pro Artikel“ im Abgleich anzeigen | **freigegeben** (Schritt 5) |
 | `write_products` | Store Manager Agent legt Produkt-**Entwürfe** an | nach Freigabe + Code-Review |
 | `read_orders` | Bestellungen für die Einkaufsprüfung lesen | später, mit Webhooks |
 

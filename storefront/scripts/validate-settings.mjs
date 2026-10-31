@@ -40,6 +40,14 @@ for (const file of readdirSync(join(root, "sections")).filter((f) => f.endsWith(
   if (match) schemas[file.replace(".liquid", "")] = JSON.parse(match[1]);
 }
 
+// 2b. Schema-Regeln, die Shopify erst beim Hochladen prüft
+for (const [name, schema] of Object.entries(schemas)) {
+  const all = [...(schema.settings ?? []), ...(schema.blocks ?? []).flatMap((b) => b.settings ?? [])];
+  for (const s of all) {
+    if (s.id && "default" in s && s.default === "") errors.push(`sections/${name}.liquid: Einstellung "${s.id}" – leerer Standardwert ist nicht erlaubt (default weglassen)`);
+  }
+}
+
 // 3. JSON-Templates und Section-Gruppen prüfen
 const files = [
   ...readdirSync(join(root, "templates"))

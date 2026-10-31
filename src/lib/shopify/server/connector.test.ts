@@ -123,8 +123,14 @@ describe("Read-only-Admin-Client", () => {
     await expect(createReadOnlyAdminClient(credentials, fetchImpl)).rejects.toThrow(/Schreibrechte/);
   });
 
+  it("akzeptiert zusätzlich read_inventory, aber keine anderen Rechte", async () => {
+    await expect(createReadOnlyAdminClient(credentials, fakeShopify({ scope: "read_products,read_inventory" }).fetchImpl)).resolves.toBeDefined();
+    clearTokenCache();
+    await expect(createReadOnlyAdminClient(credentials, fakeShopify({ scope: "read_products,read_orders" }).fetchImpl)).rejects.toThrow(/nicht vorgesehene Rechte/);
+  });
+
   it("bricht ab, wenn read_products fehlt", async () => {
-    const { fetchImpl } = fakeShopify({ scope: "read_orders" });
+    const { fetchImpl } = fakeShopify({ scope: "read_inventory" });
     await expect(createReadOnlyAdminClient(credentials, fetchImpl)).rejects.toThrow(/read_products/);
   });
 

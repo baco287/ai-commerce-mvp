@@ -4,7 +4,15 @@
 import { DEMO_MARKERS } from "./listings";
 import type { ProductSetInput } from "./product-input";
 
-/** Teilmenge der Admin-API-Produktdaten (lesbar mit read_products). */
+/** Bestand und Kosten einer Variante (nur mit read_inventory verfügbar). */
+export interface VariantInventory {
+  tracked: boolean;
+  quantity: number | null;
+  /** „Kosten pro Artikel“, zwei Nachkommastellen; null = nicht gepflegt */
+  unitCost: string | null;
+}
+
+/** Teilmenge der Admin-API-Produktdaten (lesbar mit read_products, Bestand mit read_inventory). */
 export interface ShopifyProduct {
   id: string;
   title: string;
@@ -13,6 +21,8 @@ export interface ShopifyProduct {
   vendor: string;
   productType: string;
   tags: string[];
+  /** Hauptbild; null = kein Bild */
+  featuredMedia: { id: string } | null;
   variants: {
     id: string;
     title: string;
@@ -20,6 +30,8 @@ export interface ShopifyProduct {
     price: string;
     inventoryPolicy: "DENY" | "CONTINUE";
     selectedOptions: { name: string; value: string }[];
+    /** undefined = nicht gelesen (App ohne read_inventory) */
+    inventory?: VariantInventory;
   }[];
 }
 
@@ -35,6 +47,8 @@ export interface ReconcileResult {
   unknownDemo: ShopifyProduct[];
   /** Alle übrigen Shopify-Produkte (z. B. Shopify-Testdaten) */
   otherCount: number;
+  /** Wurden Bestand und Kosten mitverglichen (read_inventory vorhanden)? */
+  inventoryChecked: boolean;
   summary: { expected: number; match: number; drift: number; missing: number };
 }
 
@@ -55,6 +69,8 @@ function compareProduct(expected: ProductSetInput, actual: ShopifyProduct): Fiel
   add("Hersteller", expected.vendor, actual.vendor);
   add("Produkttyp", expected.productType, actual.productType);
 
+  if (expected.files.length > 0) add("Produktbild", "vorhanden", actual.featuredMedia ? "vorhanden" : "fehlt");
+
   const missingTags = expected.tags.filter((t) => !actual.tags.includes(t));
   if (missingTags.length) diffs.push({ field: "Tags", expected: expected.tags.join(", "), actual: actual.tags.join(", ") || "–" });
 
@@ -69,6 +85,12 @@ function compareProduct(expected: ProductSetInput, actual: ShopifyProduct): Fiel
     add(`Preis ${sku}`, ev.price, Number(av.price).toFixed(2));
     add(`Überverkauf ${sku}`, ev.inventoryPolicy, av.inventoryPolicy);
     add(`Option ${sku}`, ev.optionValues.map((o) => o.name).join(" / "), av.selectedOptions.map((o) => o.value).join(" / "));
+    if (av.inventory) {
+      // Demo-Produkte: Bestand verfolgt und 0 – Shopify sperrt damit Warenkorb und Checkout serverseitig.
+      add(`Bestand verfolgt ${sku}`, ev.inventoryItem.tracked ? "ja" : "nein", av.inventory.tracked ? "ja" : "nein");
+      add(`Bestand ${sku}`, "0", av.inventory.quantity === null ? "–" : String(av.inventory.quantity));
+      add(`Kosten ${sku}`, ev.inventoryItem.cost, av.inventory.unitCost ?? "nicht gepflegt");
+    }
   }
   const expectedSkus = new Set(expected.variants.map((v) => v.inventoryItem.sku));
   for (const av of actual.variants) {
@@ -99,6 +121,7 @@ export function reconcile(expected: ProductSetInput[], shopify: ShopifyProduct[]
     rows,
     unknownDemo,
     otherCount: rest.length - unknownDemo.length,
+    inventoryChecked: shopify.some((p) => p.variants.some((v) => v.inventory !== undefined)),
     summary: {
       expected: expected.length,
       match: rows.filter((r) => r.kind === "match").length,

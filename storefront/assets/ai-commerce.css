@@ -112,3 +112,43 @@
   font-size: 1.3rem;
   font-weight: 600;
 }
+
+/* ---------- Marke Yakaru (snippets/ai-brand-logo.liquid) ---------- */
+
+.ai-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 1rem;
+  color: rgb(var(--color-foreground));
+}
+
+.ai-brand__mark {
+  flex-shrink: 0;
+  width: 3.4rem;
+  height: 3.4rem;
+}
+
+.ai-brand__name {
+  font-family: var(--font-heading-family);
+  font-weight: 700;
+  font-size: 2.2rem;
+  letter-spacing: 0.04rem;
+  line-height: 1;
+}
+
+@media screen and (max-width: 749px) {
+  .ai-brand__mark {
+    width: 2.8rem;
+    height: 2.8rem;
+  }
+  .ai-brand__name {
+    font-size: 1.9rem;
+  }
+}
+
+/* Hinweis zu Produktbildern bei Demo-Produkten */
+.ai-facts__image-note {
+  margin: 0 0 1.2rem;
+  font-size: 1.3rem;
+  color: rgba(var(--color-foreground), 0.65);
+}

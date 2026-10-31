@@ -18,6 +18,7 @@ function asShopify(handle: string, id = handle): ShopifyProduct {
     vendor: e.vendor,
     productType: e.productType,
     tags: [...e.tags],
+    featuredMedia: { id: `gid://shopify/MediaImage/${id}` },
     variants: e.variants.map((v, i) => ({
       id: `gid://shopify/ProductVariant/${id}-${i}`,
       title: v.optionValues[0].name,
@@ -37,6 +38,7 @@ const snowboard: ShopifyProduct = {
   vendor: "yakru",
   productType: "",
   tags: [],
+  featuredMedia: null,
   variants: [{ id: "v", title: "Default Title", sku: "", price: "2629.95", inventoryPolicy: "DENY", selectedOptions: [] }],
 };
 
@@ -63,6 +65,14 @@ describe("Abgleich Shopify ↔ Kontrollzentrale", () => {
       { field: "Preis DEMO-STAND-SLV", expected: "34.90", actual: "29.90" },
       { field: "Überverkauf DEMO-STAND-GRY", expected: "DENY", actual: "CONTINUE" },
     ]);
+  });
+
+  it("meldet ein fehlendes Produktbild", () => {
+    const cable = asShopify("demo-kabel-organizer");
+    cable.featuredMedia = null;
+    const row = reconcile(expected(), [cable]).rows.find((x) => x.handle === "demo-kabel-organizer")!;
+    if (row.kind === "missing") throw new Error("erwartet gefunden");
+    expect(row.diffs).toEqual([{ field: "Produktbild", expected: "vorhanden", actual: "fehlt" }]);
   });
 
   it("erkennt Produkte über die SKU, wenn das Handle geändert wurde", () => {
@@ -117,5 +127,31 @@ describe("Pipeline zur Produktanlage (Dry-Run)", () => {
   it("stoppt das Uhrenarmband schon bei der Produktanalyse (geringe Nachfrage)", () => {
     const band = run("freigegeben").find((r) => r.productId === "p-band")!;
     expect(band.steps.find((s) => s.state === "blocked")?.key).toBe("analysis");
+  });
+});
+
+describe("Abgleich mit Bestand (read_inventory)", () => {
+  const withInventory = (handle: string, inv: { tracked: boolean; quantity: number | null; unitCost: string | null }) => {
+    const p = asShopify(handle);
+    p.variants = p.variants.map((v) => ({ ...v, inventory: { ...inv } }));
+    return p;
+  };
+
+  it("prüft Bestand und Kosten nur, wenn sie gelesen wurden", () => {
+    expect(reconcile(expected(), [asShopify("demo-led-lichtleiste")]).inventoryChecked).toBe(false);
+    const r = reconcile(expected(), [withInventory("demo-led-lichtleiste", { tracked: true, quantity: 0, unitCost: "11.60" })]);
+    expect(r.inventoryChecked).toBe(true);
+    expect(r.rows[0].kind).toBe("match");
+  });
+
+  it("meldet fehlende Bestandsverfolgung, Bestand über 0 und abweichende Kosten", () => {
+    const r = reconcile(expected(), [withInventory("demo-led-lichtleiste", { tracked: false, quantity: 5, unitCost: null })]);
+    const row = r.rows[0];
+    if (row.kind === "missing") throw new Error("erwartet gefunden");
+    expect(row.diffs).toEqual([
+      { field: "Bestand verfolgt DEMO-LED-001", expected: "ja", actual: "nein" },
+      { field: "Bestand DEMO-LED-001", expected: "0", actual: "5" },
+      { field: "Kosten DEMO-LED-001", expected: "11.60", actual: "nicht gepflegt" },
+    ]);
   });
 });

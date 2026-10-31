@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1200" width="1200" height="1200">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F6F9FC"/>
+      <stop offset="1" stop-color="#E3EAF3"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#4FB3C8" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#4FB3C8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#E4E9F0"/>
+      <stop offset="0.55" stop-color="#C9D2DD"/>
+      <stop offset="1" stop-color="#9AA6B5"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="1200" fill="url(#bg)"/>
+  
+  <ellipse cx="600" cy="985" rx="400" ry="38" fill="#14233C" opacity="0.07"/>
+  
+  <!-- Fuß -->
+  <rect x="250" y="880" width="680" height="34" rx="17" fill="url(#metal)"/>
+  <!-- Stütze -->
+  <path d="M720 896 L840 480" stroke="#9AA6B5" stroke-width="42" stroke-linecap="round"/>
+  <path d="M720 896 L840 480" stroke="url(#metal)" stroke-width="30" stroke-linecap="round"/>
+  <circle cx="720" cy="896" r="26" fill="#9AA6B5"/>
+  <circle cx="720" cy="896" r="12" fill="#FFFFFF"/>
+  <!-- Ablage -->
+  <path d="M300 660 L880 470" stroke="#9AA6B5" stroke-width="40" stroke-linecap="round"/>
+  <path d="M300 660 L880 470" stroke="url(#metal)" stroke-width="28" stroke-linecap="round"/>
+  <path d="M300 660 L286 612" stroke="#9AA6B5" stroke-width="24" stroke-linecap="round"/>
+  <circle cx="840" cy="483" r="24" fill="#9AA6B5"/>
+  <circle cx="840" cy="483" r="10" fill="#FFFFFF"/>
+  <!-- Laptop -->
+  <path d="M322 622 L868 443" stroke="#2B3442" stroke-width="24" stroke-linecap="round"/>
+  <path d="M868 443 L930 120" stroke="#14233C" stroke-width="30" stroke-linecap="round"/>
+  <path d="M858 430 L918 118" stroke="#4FB3C8" stroke-width="6" stroke-linecap="round" opacity="0.8"/>
+  <!-- Belüftung angedeutet -->
+  <circle cx="430" cy="624" r="5" fill="#4FB3C8" opacity="0.5"/><circle cx="520" cy="594.5" r="5" fill="#4FB3C8" opacity="0.5"/><circle cx="610" cy="565" r="5" fill="#4FB3C8" opacity="0.5"/><circle cx="700" cy="535.5" r="5" fill="#4FB3C8" opacity="0.5"/>
+  <text x="1150" y="1160" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="24" fill="#7A869A">Illustration · Symbolbild</text>
+</svg>

@@ -34,7 +34,7 @@ export async function getShopifySyncStatus(): Promise<ShopifySyncStatus> {
   try {
     const client = await createReadOnlyAdminClient(config.credentials);
     const shop = await readShopInfo(client);
-    const products = await readAllProducts(client);
+    const products = await readAllProducts(client, { withInventory: client.scopes.includes("read_inventory") });
     const expected = planProductSync(getProductAnalyses()).map((p) => p.input);
     return {
       state: "connected",

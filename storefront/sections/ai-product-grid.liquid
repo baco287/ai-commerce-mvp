@@ -1,0 +1,111 @@
+{%- comment -%}
+  AI Commerce: Produkt-Raster für die Startseite. Zeigt ausschließlich echte, aktive Produkte.
+  Anders als Dawns „Ausgewählte Kollektion“ erscheinen ohne Produkte KEINE Beispielprodukte mit
+  erfundenen Preisen, sondern ein ehrlicher Hinweis.
+{%- endcomment -%}
+
+{{ 'component-card.css' | asset_url | stylesheet_tag }}
+{{ 'component-price.css' | asset_url | stylesheet_tag }}
+{{ 'template-collection.css' | asset_url | stylesheet_tag }}
+
+{%- liquid
+  assign source = collections[section.settings.collection_handle]
+  if source == blank or source.id == blank
+    assign source = collections.all
+  endif
+  assign shown = 0
+-%}
+
+<div class="color-{{ section.settings.color_scheme }} gradient">
+  <div class="page-width ai-products">
+    <div class="ai-products__header">
+      <h2 class="h2">{{ section.settings.title }}</h2>
+      {%- if source.products_count > 0 -%}
+        <a class="ai-products__all link underlined-link" href="{{ source.url }}">Alle ansehen</a>
+      {%- endif -%}
+    </div>
+
+    {%- if source.products_count > 0 -%}
+      <ul class="grid product-grid grid--2-col-tablet-down grid--4-col-desktop" role="list">
+        {%- for product in source.products limit: section.settings.products_to_show -%}
+          {%- assign shown = shown | plus: 1 -%}
+          <li class="grid__item">
+            {% render 'card-product',
+              card_product: product,
+              media_aspect_ratio: 'square',
+              image_shape: 'default',
+              show_secondary_image: false,
+              show_vendor: false,
+              show_rating: false,
+              section_id: section.id,
+              quick_add: 'none'
+            %}
+          </li>
+        {%- endfor -%}
+      </ul>
+    {%- endif -%}
+
+    {%- if shown == 0 -%}
+      <div class="ai-products__empty">
+        <p class="ai-products__empty-title">{{ section.settings.empty_title }}</p>
+        <p>{{ section.settings.empty_text }}</p>
+      </div>
+    {%- endif -%}
+  </div>
+</div>
+
+{% stylesheet %}
+  /* .page-width im Selektor: Dawns „.page-width { padding: 0 … }“ würde sonst den Abstand überschreiben */
+  .page-width.ai-products {
+    padding-top: 4.8rem;
+    padding-bottom: 4.8rem;
+  }
+  .ai-products__header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1.6rem;
+    margin-bottom: 2.4rem;
+  }
+  .ai-products__header .h2 {
+    margin: 0;
+  }
+  .ai-products__all {
+    font-size: 1.5rem;
+    white-space: nowrap;
+  }
+  .ai-products__empty {
+    padding: 3.2rem;
+    border-radius: 0.8rem;
+    border: 0.1rem dashed rgba(var(--color-foreground), 0.2);
+    background: rgba(var(--color-foreground), 0.02);
+    text-align: center;
+    color: rgba(var(--color-foreground), 0.75);
+  }
+  .ai-products__empty p {
+    margin: 0;
+  }
+  .ai-products__empty-title {
+    margin-bottom: 0.6rem !important;
+    font-family: var(--font-heading-family);
+    font-size: 1.8rem;
+    color: rgb(var(--color-foreground));
+  }
+{% endstylesheet %}
+
+{% schema %}
+{
+  "name": "Yakaru Produkte",
+  "tag": "section",
+  "class": "section",
+  "settings": [
+    { "type": "text", "id": "title", "label": "Überschrift", "default": "Ausgewählte Produkte" },
+    { "type": "text", "id": "collection_handle", "label": "Handle der Kollektion (leer = alle Produkte)" },
+    { "type": "range", "id": "products_to_show", "min": 2, "max": 12, "step": 1, "label": "Anzahl Produkte", "default": 8 },
+    { "type": "text", "id": "empty_title", "label": "Text ohne Produkte – Titel", "default": "Unser Sortiment entsteht gerade" },
+    { "type": "text", "id": "empty_text", "label": "Text ohne Produkte", "default": "Die ersten Produkte werden derzeit geprüft und erscheinen hier, sobald sie freigegeben sind." },
+    { "type": "color_scheme", "id": "color_scheme", "label": "Farbschema", "default": "scheme-1" }
+  ],
+  "presets": [{ "name": "Yakaru Produkte" }]
+}
+{% endschema %}

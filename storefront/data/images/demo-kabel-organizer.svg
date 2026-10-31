@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1200" width="1200" height="1200">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F6F9FC"/>
+      <stop offset="1" stop-color="#E3EAF3"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#4FB3C8" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#4FB3C8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#E4E9F0"/>
+      <stop offset="0.55" stop-color="#C9D2DD"/>
+      <stop offset="1" stop-color="#9AA6B5"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="1200" fill="url(#bg)"/>
+  
+  <ellipse cx="600" cy="985" rx="400" ry="38" fill="#14233C" opacity="0.07"/>
+  
+  <rect x="200" y="660" width="800" height="26" rx="13" fill="#D3DCE7"/>
+  <path d="M280 600 C230 470 350 330 300 190" fill="none" stroke="#14233C" stroke-width="20" stroke-linecap="round"/>
+        <path d="M280 600 C320 760 220 880 270 1010" fill="none" stroke="#14233C" stroke-width="20" stroke-linecap="round"/>
+        <rect x="282" y="150" width="36" height="58" rx="10" fill="#14233C"/>
+        <rect x="292" y="128" width="16" height="28" rx="4" fill="#C9D2DD"/><path d="M440 600 C390 470 510 330 460 190" fill="none" stroke="#3A4A63" stroke-width="20" stroke-linecap="round"/>
+        <path d="M440 600 C480 760 380 880 430 1010" fill="none" stroke="#3A4A63" stroke-width="20" stroke-linecap="round"/>
+        <rect x="442" y="150" width="36" height="58" rx="10" fill="#3A4A63"/>
+        <rect x="452" y="128" width="16" height="28" rx="4" fill="#C9D2DD"/><path d="M600 600 C550 470 670 330 620 190" fill="none" stroke="#4FB3C8" stroke-width="20" stroke-linecap="round"/>
+        <path d="M600 600 C640 760 540 880 590 1010" fill="none" stroke="#4FB3C8" stroke-width="20" stroke-linecap="round"/>
+        <rect x="602" y="150" width="36" height="58" rx="10" fill="#4FB3C8"/>
+        <rect x="612" y="128" width="16" height="28" rx="4" fill="#C9D2DD"/><path d="M760 600 C710 470 830 330 780 190" fill="none" stroke="#9AA6B5" stroke-width="20" stroke-linecap="round"/>
+        <path d="M760 600 C800 760 700 880 750 1010" fill="none" stroke="#9AA6B5" stroke-width="20" stroke-linecap="round"/>
+        <rect x="762" y="150" width="36" height="58" rx="10" fill="#9AA6B5"/>
+        <rect x="772" y="128" width="16" height="28" rx="4" fill="#C9D2DD"/><path d="M920 600 C870 470 990 330 940 190" fill="none" stroke="#1E3A5F" stroke-width="20" stroke-linecap="round"/>
+        <path d="M920 600 C960 760 860 880 910 1010" fill="none" stroke="#1E3A5F" stroke-width="20" stroke-linecap="round"/>
+        <rect x="922" y="150" width="36" height="58" rx="10" fill="#1E3A5F"/>
+        <rect x="932" y="128" width="16" height="28" rx="4" fill="#C9D2DD"/>
+  <circle cx="280" cy="600" r="62" fill="#FFFFFF" stroke="#D3DCE7" stroke-width="6"/>
+      <circle cx="280" cy="600" r="38" fill="none" stroke="#4FB3C8" stroke-width="8"/>
+      <rect x="254" y="588" width="52" height="24" rx="12" fill="#14233C"/><circle cx="440" cy="600" r="62" fill="#FFFFFF" stroke="#D3DCE7" stroke-width="6"/>
+      <circle cx="440" cy="600" r="38" fill="none" stroke="#4FB3C8" stroke-width="8"/>
+      <rect x="414" y="588" width="52" height="24" rx="12" fill="#14233C"/><circle cx="600" cy="600" r="62" fill="#FFFFFF" stroke="#D3DCE7" stroke-width="6"/>
+      <circle cx="600" cy="600" r="38" fill="none" stroke="#4FB3C8" stroke-width="8"/>
+      <rect x="574" y="588" width="52" height="24" rx="12" fill="#14233C"/><circle cx="760" cy="600" r="62" fill="#FFFFFF" stroke="#D3DCE7" stroke-width="6"/>
+      <circle cx="760" cy="600" r="38" fill="none" stroke="#4FB3C8" stroke-width="8"/>
+      <rect x="734" y="588" width="52" height="24" rx="12" fill="#14233C"/><circle cx="920" cy="600" r="62" fill="#FFFFFF" stroke="#D3DCE7" stroke-width="6"/>
+      <circle cx="920" cy="600" r="38" fill="none" stroke="#4FB3C8" stroke-width="8"/>
+      <rect x="894" y="588" width="52" height="24" rx="12" fill="#14233C"/>
+  <text x="1150" y="1160" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="24" fill="#7A869A">Illustration · Symbolbild</text>
+</svg>

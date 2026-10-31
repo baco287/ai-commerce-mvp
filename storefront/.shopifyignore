@@ -1,10 +1,10 @@
 # Dateien, die NICHT zu Shopify hochgeladen werden (nur Theme-Ordner gehören in den Shop)
-data/
-node_modules/
+data/*
+node_modules/*
 package.json
 package-lock.json
 README.md
 LICENSE.md
 .prettierrc.json
 .theme-check.yml
-scripts/
+scripts/*

@@ -112,6 +112,15 @@ async function LiveSyncStatus() {
             Erkennung über URL-Handle, ersatzweise über SKU. Nicht zugeordnete Shopify-Produkte: {result.otherCount}
             {result.otherCount > 0 && " (z. B. Shopify-Testdaten)"}.
           </p>
+          <p className="mt-1 text-xs">
+            {result.inventoryChecked ? (
+              <span className="text-emerald-300">Bestand, Bestandsverfolgung und Kosten pro Artikel werden mitgeprüft (read_inventory).</span>
+            ) : (
+              <span className="text-subtle">
+                Bestand und Kosten werden nicht geprüft – dafür braucht die App zusätzlich read_inventory.
+              </span>
+            )}
+          </p>
         </Card>
       </div>
 
