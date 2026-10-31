@@ -54,6 +54,9 @@ describe("Eignungsprüfung", () => {
 
     it("verlangt verantwortliche Person in der EU und deutsche Sicherheitshinweise", () => {
       expect(codes({ safety: { euResponsiblePerson: said("Firma X") } })).toEqual(["safety_unclear"]);
+      // Eine bestätigte, aber leere Angabe ist kein Nachweis
+      const empty = checkEligibility(quote({ safety: { euResponsiblePerson: ok("  ") } }), query);
+      expect(empty.exclusions).toEqual([{ code: "safety_unclear", message: "Verantwortliche Person in der EU (GPSR) leer." }]);
       expect(codes({ safety: { safetyInformationDe: missing() } })).toEqual(["safety_unclear"]);
     });
 

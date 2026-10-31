@@ -59,7 +59,12 @@ import { scoutSuppliers, DEMO_ADAPTERS, DEMO_QUERIES } from "@/lib/suppliers";
 const report = await scoutSuppliers(DEMO_QUERIES["p-led"], DEMO_ADAPTERS);
 report.recommendations.best?.supplierName; // "EuroLight Fulfillment (Demo)"
 report.recommendations.best?.reasons;      // Begründung, ein Satz je Eintrag
+report.recommendations.best?.approval;     // immer "none" – eine Empfehlung ist nie eine Einkaufsfreigabe
 ```
+
+Neben `kind`, `quoteId`, `supplierName` und `reasons` enthält jede Empfehlung strukturierte Felder, damit
+Aufrufer keine Begründungstexte auswerten müssen: `approval` (immer `"none"`), `demo`, `requiresPrefinancing`,
+`financingStatus`, `openPoints` (offene Punkte als `{ code, message }`), `perUnit`, `deliveryDays` und `score`.
 
 ## Fehlende und unbestätigte Angaben
 
@@ -83,7 +88,7 @@ Ein Angebot wird ausgeschlossen – und nie empfohlen –, wenn einer dieser Pun
 | `identity_mismatch` | GTIN weicht vom gesuchten Produkt ab, oder Lieferant führt bestätigt ein anderes Produkt |
 | `identity_unconfirmed` | Weder bestätigte GTIN noch bestätigter exakter Abgleich (z. B. nur „ähnliche Variante") |
 | `safety_issue` | Bekanntes Sicherheitsproblem (Rückruf, Behördenwarnung) |
-| `safety_unclear` | CE-Kennzeichnung (falls nötig), verantwortliche Person in der EU (GPSR) oder deutsche Sicherheitshinweise nicht bestätigt |
+| `safety_unclear` | CE-Kennzeichnung (falls nötig), verantwortliche Person in der EU (GPSR; eine leere Angabe zählt nicht) oder deutsche Sicherheitshinweise nicht bestätigt |
 | `dropshipping_unavailable` | Direktversand an Endkunden nicht bestätigt |
 | `not_deliverable` | Keine Lieferung nach DE, Bestand unbekannt oder kleiner als die Bestellmenge, Lieferzeit unbekannt |
 | `insufficient_stock` | Bestand unter `minStock` (50) |
