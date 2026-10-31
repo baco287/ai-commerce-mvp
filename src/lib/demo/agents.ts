@@ -6,14 +6,19 @@ export const DEMO_AGENTS: Agent[] = [
   {
     id: "market-research",
     name: "Market Research Agent",
-    role: "Trendprodukte finden",
-    description: "Wertet Such-, Social- und Saisonsignale aus und schlägt Produktideen mit Nachfragebewertung vor.",
+    role: "Trendprodukte finden (Market Scout)",
+    description:
+      "Findet Produktthemen in Wikipedia-Kategorien, misst öffentliches Interesse (7/30 Tage, Saison) und übergibt Kandidaten an Supplier Scout, Profit Check, Compliance und Shopify-Dry-Run. Demo-Signale sind gekennzeichnet.",
     status: "active",
     lastRun: "2026-10-19T07:45:00Z",
     nextRun: "2026-10-19T13:45:00Z",
     runsToday: 2,
-    allowedActions: ["Demo-Signale auswerten", "Produktideen vorschlagen"],
-    approvalRequired: ["Neues Produkt in die Analyse übernehmen"],
+    allowedActions: [
+      "Kostenlose öffentliche Marktsignale abrufen (Wikimedia, begrenzt)",
+      "Kandidaten bewerten und an den Supplier Scout übergeben",
+      "Shopify-Entwürfe als Dry-Run vorbereiten",
+    ],
+    approvalRequired: ["Produkt freigeben", "Shopify-Entwurf anlegen", "Kostenpflichtige Datenquellen", "Werbung und Einkauf"],
   },
   {
     id: "supplier-scout",

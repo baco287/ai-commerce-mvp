@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getActivities, getDashboardMetrics, getOrderRows, getProductAnalyses } from "./data";
+import { getActivities, getDashboardMetrics, getMarketScoutOverview, getOrderRows, getProductAnalyses } from "./data";
 import { DEMO_AGENTS } from "./demo/agents";
 import { DEMO_PRODUCTS } from "./demo/products";
 
@@ -61,5 +61,22 @@ describe("Demo-Daten widerspruchsfrei", () => {
       expect(a.best?.offer.id, a.product.id).toBe(a.scout.recommendations.cheapest?.quoteId);
       expect(a.offers.every((o) => o.offer.paymentTerms === "vorkasse"), a.product.id).toBe(true);
     }
+  });
+});
+
+describe("Market Scout im Dashboard", () => {
+  it("zeigt ohne gespeicherten Lauf eine gekennzeichnete Demo-Vorschau – ohne Netzwerk, ohne Freigaben", async () => {
+    const o = await getMarketScoutOverview(new Date("2026-10-31T08:00:00Z"));
+    expect(o.origin).toBe("demo");
+    expect(o.lastRun).toMatchObject({ mode: "demo", costEur: 0, requests: { used: 0 } });
+    expect(o.candidates).toHaveLength(DEMO_PRODUCTS.length);
+    for (const c of o.candidates) {
+      expect(c.latest.candidate.demo, c.latest.candidate.title).toBe(true);
+      expect(["approved", "draft_created"]).not.toContain(c.latest.state);
+      expect(c.latest.draft.wouldCreate).toBe(false);
+    }
+    // Die Pipeline läuft durch: mindestens ein Dry-Run-Entwurf über die bestehende Shopify-Pipeline
+    expect(o.candidates.some((c) => c.latest.draft.status === "dry_run_prepared")).toBe(true);
+    expect(o.stopRequested).toBe(false);
   });
 });

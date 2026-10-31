@@ -59,7 +59,9 @@ describe("MVP-Sicherheitsgrenzen", () => {
   // Netzwerk und Zugangsdaten sind nur an genau diesen Stellen erlaubt (Shopify, nur lesend).
   // Jede neue Stelle muss hier bewusst eingetragen werden.
   // test/setup.ts nennt fetch/WebSocket und SHOPIFY_-Variablen nur, um sie in Tests zu SPERREN bzw. zu entfernen.
-  const NETWORK_ALLOWED = ["lib/shopify/server/auth.ts", "lib/shopify/server/admin-client.ts", "test/setup.ts"];
+  // lib/market/server/wikimedia-client.ts: lesende GET-Anfragen an zwei Wikimedia-Hosts (kostenlose öffentliche Daten),
+  // nur im Befehl `npm run market:scan -- --live` – siehe Test „hält den Market Scout …“ unten.
+  const NETWORK_ALLOWED = ["lib/shopify/server/auth.ts", "lib/shopify/server/admin-client.ts", "lib/market/server/wikimedia-client.ts", "test/setup.ts"];
   const ENV_ALLOWED = ["lib/shopify/server/config.ts", "test/setup.ts"];
   const rel = (f: string) => f.slice(SRC.length + 1).replaceAll("\\", "/");
 
@@ -126,6 +128,33 @@ describe("MVP-Sicherheitsgrenzen", () => {
     }
   });
 
+  it("hält den Market Scout in seinen Grenzen: nur lesende Wikimedia-Abrufe, kein Shopify-Schreiben, kein Einkauf, keine Freigabe", () => {
+    const marketFiles = [...sourceFiles(join(SRC, "lib", "market")), join(SCRIPTS, "market-scan.ts")];
+    expect(marketFiles.length).toBeGreaterThan(8);
+    for (const f of marketFiles) {
+      const code = readFileSync(f, "utf8");
+      // Shopify nur lesend über die bestehende Dry-Run-Pipeline – nie Admin-Client, Schreib-Client oder GraphQL
+      expect(code, fromRoot(f)).not.toMatch(/lib\/shopify\/server|admin-client|createGuardedWriteClient|shopify\/graphql|write-operations/);
+      expect(code, fromRoot(f)).not.toMatch(/evaluateAutoPurchase|toPurchaseGuardTerms|\b(placeOrder|createOrder|submitOrder|purchase|pay)\s*\(/);
+      expect(code, fromRoot(f)).not.toMatch(/process\.env/);
+      // Der Agent setzt nie selbst „freigegeben“ oder „Entwurf erstellt“
+      expect(code, fromRoot(f)).not.toMatch(/state:\s*["'](approved|draft_created)["']/);
+    }
+    // Netzwerk nur im Wikimedia-Client, und der ist serverseitig
+    const withNetwork = marketFiles.filter((f) => /\bfetch\b|XMLHttpRequest|\baxios\b|node:https?|\bWebSocket\b/.test(readFileSync(f, "utf8"))).map(fromRoot);
+    expect(withNetwork).toEqual(["src/lib/market/server/wikimedia-client.ts"]);
+    for (const f of sourceFiles(join(SRC, "lib", "market", "server"))) {
+      expect(readFileSync(f, "utf8"), fromRoot(f)).toMatch(/^(\/\/.*\n|\s)*import "server-only";/);
+    }
+    // Dashboard bindet den Netzwerk-Client nie ein und bietet keine Aktion an
+    const ui = sourceFiles(SRC).filter((f) => /[\\/](app|components)[\\/]/.test(f));
+    for (const f of ui) expect(readFileSync(f, "utf8"), rel(f)).not.toMatch(/wikimedia-client|runMarketScan\(.*allowNetwork:\s*true/);
+    for (const f of sourceFiles(join(SRC, "components", "market"))) {
+      const code = readFileSync(f, "utf8");
+      expect(code, rel(f)).not.toMatch(/["']use (client|server)["']|<button|<form|onClick|formAction/);
+    }
+  });
+
   it("hält den Lieferanten-Import lokal: kein Shopify, kein Netzwerk, keine Bestellung", () => {
     const importFiles = [
       ...sourceFiles(join(SRC, "lib", "suppliers", "import")),
@@ -143,7 +172,7 @@ describe("MVP-Sicherheitsgrenzen", () => {
     const writers = allFiles()
       .filter((f) => /\b(writeFileSync|renameSync|appendFileSync|writeFile)\b/.test(readFileSync(f, "utf8")))
       .map(fromRoot);
-    expect(writers.sort()).toEqual(["src/lib/shopify/server/sync-state.ts", "src/lib/suppliers/server/offer-store.ts"]);
+    expect(writers.sort()).toEqual(["src/lib/market/server/market-store.ts", "src/lib/shopify/server/sync-state.ts", "src/lib/suppliers/server/offer-store.ts"]);
     expect(readFileSync(join(SRC, "lib", "suppliers", "server", "offer-store.ts"), "utf8")).toMatch(/^(\/\/.*\n|\s)*import "server-only";/);
     expect(readFileSync(join(ROOT, ".gitignore"), "utf8")).toMatch(/^\.data\/$/m);
   });

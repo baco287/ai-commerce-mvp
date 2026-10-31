@@ -17,6 +17,13 @@ for (const key of Object.keys(process.env)) if (key.startsWith("SHOPIFY_")) dele
 
 export const testSupplierData: { store: OfferStore; evidence: EvidenceEntry[] } = { store: emptyOfferStore(), evidence: [] };
 
+// Auch der Market-Scout-Speicher (.data/market) bleibt in Tests leer, und kein Abbruchschalter ist gesetzt.
+vi.mock("@/lib/market/server/market-store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/market/server/market-store")>();
+  const { emptyMarketState } = await import("@/lib/market/state");
+  return { ...actual, loadMarketState: () => ({ state: emptyMarketState() }), isStopRequested: () => false };
+});
+
 vi.mock("@/lib/suppliers/server/offer-store", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/suppliers/server/offer-store")>();
   return {
