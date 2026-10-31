@@ -8,7 +8,7 @@ import { DEMO_QUERIES, DEMO_REQUIRED_DOCUMENTS, demoQuotesFor } from "../demo/de
 import { assessFinancing } from "../financing";
 import { assessFunding, type FundingContext } from "../funding";
 import { factLevel } from "../model";
-import { createPriceListAdapter, priceListQuotesFor } from "./adapter";
+import { createPriceListAdapter, outdatedOfferKeys, priceListQuotesFor } from "./adapter";
 import type { EvidenceEntry, EvidenceField } from "./evidence";
 import { emptyOfferStore, type ImportedOfferData, type OfferStore, type StoredOffer } from "./types";
 
@@ -66,6 +66,7 @@ const FULL_EVIDENCE: EvidenceEntry[] = [
   proof("dropshipping.supported", true),
   proof("pricing.unitPrice", 9.5),
   proof("pricing.shippingCost", 3.5),
+  proof("fulfillment.shipsFrom", "DE"),
   proof("fulfillment.deliversToDestination", true),
   proof("fulfillment.deliveryDays", { min: 2, max: 3 }),
   proof("fulfillment.stock", 400),
@@ -206,7 +207,7 @@ describe("Scout: Befunde aus dem Review", () => {
     testSupplierData.evidence = safetyOnly;
     const o = importedOf(testSupplierData.store, safetyOnly);
     expect(o.eligible).toBe(false);
-    expect(o.exclusions.join(" ")).toMatch(/Preisliste ohne Nachweis für Einkaufspreis, Versandkosten, Lieferung nach DE, Lieferzeit, Lieferantenbestand/);
+    expect(o.exclusions.join(" ")).toMatch(/Preisliste ohne Nachweis für Einkaufspreis, Versandkosten, Versandland, Lieferung nach DE, Lieferzeit, Lieferantenbestand/);
     const stand = getProductAnalyses().find((a) => a.product.id === "p-stand")!;
     expect(stand.best?.landedCost).toBe(15.1);
   });
@@ -217,6 +218,90 @@ describe("Scout: Befunde aus dem Review", () => {
     const stand = getProductAnalyses().find((a) => a.product.id === "p-stand")!;
     expect(stand.best?.landedCost).toBe(13);
     expect(standView(testSupplierData.store, FULL_EVIDENCE).purchaseApproved).toBe(false);
+  });
+});
+
+describe("Scout: Befunde aus dem abschließenden Review", () => {
+  it("leitet Importkosten 0 € nie aus einem nur angegebenen Versandland ab", () => {
+    const withoutShipsFrom = FULL_EVIDENCE.filter((e) => e.field !== "fulfillment.shipsFrom");
+    const o = importedOf(storeWith(offer({ unitPrice: 1 })), withoutShipsFrom);
+    expect(o.eligible).toBe(false);
+    expect(o.exclusions.join(" ")).toMatch(/Preisliste ohne Nachweis für .*Versandland/);
+    // Außerhalb der EU braucht es zusätzlich belegte Importkosten
+    const cn = [...withoutShipsFrom, proof("fulfillment.shipsFrom", "CN")];
+    const fromCn = importedOf(storeWith(offer({ shipsFrom: "CN" })), cn);
+    expect(fromCn.exclusions.join(" ")).toMatch(/Importkosten/);
+    expect(fromCn.source).toBe("real_unverified");
+    const withImport = importedOf(storeWith(offer({ shipsFrom: "CN" })), [...cn, proof("pricing.importCost", 1.2)]);
+    expect(withImport.eligible).toBe(true);
+    expect(withImport.source).toBe("real_verified");
+    expect(withImport.perUnit).toBe(14.2);
+  });
+
+  it("wendet sich widersprechende Nachweise zum selben Feld nicht an – egal in welcher Reihenfolge", () => {
+    const led = DEMO_QUERIES["p-led"];
+    const ledOffer = offer({ gtin: led.gtin });
+    const ce = (value: boolean, checkedAt: string) => ({ ...proof("safety.ceMarking", value, led.gtin!), checkedAt });
+    for (const entries of [
+      [ce(false, "2026-10-30"), ce(true, "2025-01-01")],
+      [ce(true, "2025-01-01"), ce(false, "2026-10-30")],
+    ]) {
+      const [q] = priceListQuotesFor(storeWith(ledOffer), led, entries);
+      expect(q.safety.ceMarking.status).toBe("missing");
+      expect(q.provenance?.evidenceConflicts?.join(" ")).toMatch(/CE-Kennzeichnung widersprechen sich/);
+    }
+    const stock = (value: number) => proof("fulfillment.stock", value);
+    const [q] = priceListQuotesFor(storeWith(offer({ stock: undefined })), STAND, [stock(0), stock(400)]);
+    expect(q.fulfillment.stock.status).toBe("missing");
+  });
+
+  it("verwirft Identitäts- und Sicherheitsnachweise, wenn der Lieferant den Artikel seither geändert hat", () => {
+    const old = offer();
+    const changed: StoredOffer = {
+      ...offer({ title: "Laptopständer Kunststoff (neues Modell)", brand: "NoName" }),
+      history: [{ data: old.data, provenance: old.provenance, replacedAt: "2026-10-20T10:00:00.000Z", replacedByImportId: "imp-2" }],
+    };
+    const before = FULL_EVIDENCE.map((e) => ({ ...e, checkedAt: "2026-10-01" }));
+    const o = importedOf(storeWith(changed), before);
+    expect(o.eligible).toBe(false);
+    expect(o.source).toBe("real_unverified");
+    expect(o.warnings.join(" ")).toMatch(/nicht nach der Artikeländerung vom 2026-10-20 geprüft/);
+    expect(o.exclusions.join(" ")).toMatch(/Verantwortliche Person in der EU \(GPSR\) fehlt/);
+    // Nach erneuter Prüfung gilt der Nachweis wieder
+    const after = FULL_EVIDENCE.map((e) => ({ ...e, checkedAt: "2026-10-25" }));
+    expect(importedOf(storeWith(changed), after).source).toBe("real_verified");
+    // Nachweis vom Tag der Änderung (Berliner Zeit) gilt nicht – 23:30 UTC ist in Berlin schon der Folgetag
+    const lateNight: StoredOffer = { ...changed, history: [{ ...changed.history[0], replacedAt: "2026-10-25T23:30:00.000Z" }] };
+    const sameDay = FULL_EVIDENCE.map((e) => ({ ...e, checkedAt: "2026-10-26" }));
+    expect(importedOf(storeWith(lateNight), sameDay).source).toBe("real_unverified");
+    const nextDay = FULL_EVIDENCE.map((e) => ({ ...e, checkedAt: "2026-10-27" }));
+    expect(importedOf(storeWith(lateNight), nextDay).source).toBe("real_verified");
+    // Reine Preisänderung ist keine Artikeländerung
+    const priceOnly: StoredOffer = { ...offer(), history: [{ ...changed.history[0], data: { ...old.data, unitPrice: 9.9 } }] };
+    expect(importedOf(storeWith(priceOnly), before).source).toBe("real_verified");
+  });
+
+  it("schließt Angebote aus, die in der letzten Liste des Lieferanten fehlen oder dort abgelehnt wurden", () => {
+    const log = (importId: string, importedAt: string) => ({
+      importId,
+      importedAt,
+      file: `${importId}.csv`,
+      fileSha256: importId,
+      synthetic: false,
+      confirmationCode: importId,
+      counts: { new: 0, changed: 0, unchanged: 0, rejected: 0, notInFile: 0 },
+    });
+    const imports = [log("imp-1", "2026-10-01T10:00:00.000Z"), log("imp-2", "2026-10-20T10:00:00.000Z")];
+    const current = { ...offer({ supplierSku: "GB-OTHER", gtin: "2000000000992" }), key: "grosshandel-beispiel::GB-OTHER", lastSeenImportId: "imp-2" };
+    const stale = { ...offer(), lastSeenImportId: "imp-1" };
+    const store: OfferStore = { version: 1, offers: { [stale.key]: stale, [current.key]: current }, imports };
+    expect([...outdatedOfferKeys(store)]).toEqual([KEY]);
+    const o = importedOf(store, FULL_EVIDENCE);
+    expect(o.eligible).toBe(false);
+    expect(o.exclusions.join(" ")).toMatch(/Nicht in der aktuellen Preisliste/);
+    // Andere Lieferanten sind davon nicht betroffen
+    const other = { ...offer({ supplierId: "anderer", supplierName: "Anderer" }), key: "anderer::GB-STAND-1", lastSeenImportId: "imp-1" };
+    expect(outdatedOfferKeys({ ...store, offers: { ...store.offers, [other.key]: other } }).has(other.key)).toBe(false);
   });
 });
 

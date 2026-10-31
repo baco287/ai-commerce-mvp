@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { DEMO_QUERIES } from "../demo/demo-suppliers";
 import { applyImportPlan, confirmationCodeFor, planImport } from "./plan";
+import { outdatedOfferKeys } from "./adapter";
 import { supplierIdOf } from "./records";
 import { emptyOfferStore, type OfferStore } from "./types";
 
@@ -134,6 +135,39 @@ describe("Preislisten-Import: Übernahme ohne Datenverlust", () => {
     expect(confirmationCodeFor({ ...base, mapping: { defaults: { currency: "EUR" } } })).not.toBe(p.confirmationCode);
     expect(confirmationCodeFor({ ...base, synthetic: false })).not.toBe(p.confirmationCode);
     expect(plan("preisliste-update.synthetisch.csv").confirmationCode).not.toBe(p.confirmationCode);
+  });
+});
+
+describe("Preislisten-Import: Aktualität je Lieferant", () => {
+  it("markiert Angebote als nicht aktuell, wenn alle Zeilen des Lieferanten in der neuen Liste abgelehnt wurden", () => {
+    const store = applyImportPlan(plan("preisliste-de.synthetisch.csv"), emptyOfferStore());
+    expect(outdatedOfferKeys(store).size).toBe(0);
+    const text = [
+      "Lieferant;Artikelnummer;EAN;Bezeichnung;EK netto;Währung",
+      "Musterhandel Test GmbH (synthetisch);MT-LED-01;2000000000015;LED;9,10;USD",
+      "Anderer Händler (synthetisch);AH-1;2000000000022;Ständer;9,00;EUR",
+    ].join("\n");
+    const p = planImport({ text, file: "neu.synthetisch.csv", synthetic: true, importId: "imp-2", importedAt: "2026-11-01T10:00:00.000Z", knownGtins: KNOWN, store });
+    expect(p.canApply).toBe(true);
+    expect(p.suppliers).toEqual(["anderer-haendler-synthetisch", SUPPLIER]);
+    expect(p.notInFile).toHaveLength(4);
+    const next = applyImportPlan(p, store);
+    expect([...outdatedOfferKeys(next)].sort()).toEqual(Object.keys(store.offers).sort());
+    expect(outdatedOfferKeys(next).has("anderer-haendler-synthetisch::AH-1")).toBe(false);
+  });
+});
+
+describe("Preislisten-Import: große Dateien", () => {
+  it("bleibt bei tausenden Zeilen mit gleicher GTIN linear und knapp", () => {
+    const header = "Lieferant;Artikelnummer;EAN;Bezeichnung;EK netto;Währung";
+    const lines = Array.from({ length: 20000 }, (_, i) => `Test GmbH (synthetisch);SKU-${i};4006381333931;Artikel;1,00;EUR`);
+    const started = performance.now();
+    const p = planImport({ text: [header, ...lines].join("\n"), file: "gross.csv", synthetic: true, importId: "i", importedAt: "2026-10-31T10:00:00.000Z", knownGtins: KNOWN, store: emptyOfferStore() });
+    expect(performance.now() - started).toBeLessThan(5000);
+    expect(p.counts.valid).toBe(20000);
+    const warningChars = p.rows.reduce((n, r) => n + r.warnings.join("").length, 0);
+    expect(warningChars).toBeLessThan(20000 * 400);
+    expect(p.rows[0].warnings.join(" ")).toMatch(/und 19994 weiteren/);
   });
 });
 

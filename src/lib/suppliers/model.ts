@@ -183,6 +183,8 @@ export interface QuoteProvenance {
   supplierUpdatedAt?: string;
   /** Nachweise, die der aktuellen Preisliste widersprechen und deshalb NICHT angewendet wurden */
   evidenceConflicts?: string[];
+  /** Angebot fehlte in der letzten Preisliste dieses Lieferanten (oder wurde dort abgelehnt) – nicht mehr aktuell */
+  outdated?: boolean;
   /** Synthetische Testdaten – werden wie Demo-Daten behandelt */
   synthetic?: boolean;
 }

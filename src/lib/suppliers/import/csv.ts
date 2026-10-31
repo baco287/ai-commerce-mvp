@@ -31,8 +31,17 @@ export function parseCsv(text: string): CsvTable {
   let cells: string[] = [];
   let field = "";
   let quoted = false;
+  /** Feld stand in Anführungszeichen und ist geschlossen – danach ist nur noch Leerraum erlaubt */
+  let closed = false;
   let line = 1;
   let recordLine = 1;
+  const malformed = new Set<number>();
+  const fail = (at: number) => {
+    if (!malformed.has(at) && malformed.size < 20) {
+      errors.push(`Zeile ${at}: Anführungszeichen fehlerhaft (Text nach schließendem oder einzelnes Anführungszeichen im Feld).`);
+    }
+    malformed.add(at);
+  };
   for (let i = 0; i < input.length; i++) {
     const ch = input[i];
     if (quoted) {
@@ -41,26 +50,34 @@ export function parseCsv(text: string): CsvTable {
         i++;
       } else if (ch === '"') {
         quoted = false;
+        closed = true;
       } else {
         if (ch === "\n") line++;
         field += ch;
       }
       continue;
     }
-    if (ch === '"' && field.trim() === "") {
-      quoted = true;
-      field = "";
-    } else if (ch === delimiter) {
+    if (ch === delimiter) {
       cells.push(field);
       field = "";
+      closed = false;
     } else if (ch === "\n" || ch === "\r") {
       if (ch === "\r" && input[i + 1] === "\n") i++;
       cells.push(field);
       records.push({ line: recordLine, cells });
       cells = [];
       field = "";
+      closed = false;
       line++;
       recordLine = line;
+    } else if (closed) {
+      // Nie still Text an ein geschlossenes Feld anhängen („"1"7“ wäre sonst 17).
+      if (ch !== " " && ch !== "\t") fail(recordLine);
+    } else if (ch === '"') {
+      if (field.trim() === "") {
+        quoted = true;
+        field = "";
+      } else fail(recordLine);
     } else {
       field += ch;
     }

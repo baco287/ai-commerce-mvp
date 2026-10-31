@@ -19,7 +19,9 @@ export type ExclusionCode =
   | "cost_unknown"
   | "rating_too_low"
   /** Importierte Preisliste: Kosten oder Lieferfähigkeit nur vom Lieferanten angegeben, nicht nachgewiesen */
-  | "price_list_unverified";
+  | "price_list_unverified"
+  /** Importierte Preisliste: Angebot fehlt in der aktuellen Liste des Lieferanten */
+  | "price_list_outdated";
 
 export interface Finding<C extends string = string> {
   code: C;
@@ -170,10 +172,17 @@ export function checkEligibility(q: SupplierQuote, query: ProductQuery, rules: S
   // Importierte Preislisten: Eine Selbstauskunft darf nie Kalkulationsbasis (Shopify-Kosten) oder Empfehlung werden.
   // Kosten und Lieferfähigkeit müssen per Nachweis geprüft sein (siehe import/evidence.ts).
   if (q.provenance?.kind === "price_list") {
+    if (q.provenance.outdated) {
+      exclude("price_list_outdated", "Nicht in der aktuellen Preisliste des Lieferanten (fehlt dort oder wurde abgelehnt) – keine Kalkulationsgrundlage.");
+    }
+    // Versandland entscheidet über Importkosten (EU = 0 €) – daher ebenfalls nur mit Nachweis; außerhalb der EU
+    // müssen zusätzlich die Importkosten belegt sein.
     const unproven = (
       [
         ["Einkaufspreis", p.unitPrice],
         ["Versandkosten", p.shippingCost],
+        ["Versandland", q.fulfillment.shipsFrom],
+        ...(shipsFromEu(q) ? [] : ([["Importkosten", p.importCost]] as const)),
         ["Lieferung nach DE", q.fulfillment.deliversToDestination],
         ["Lieferzeit", q.fulfillment.deliveryDays],
         ["Lieferantenbestand", q.fulfillment.stock],

@@ -26,6 +26,8 @@ export const EVIDENCE_FIELDS = [
   "pricing.unitPrice",
   "pricing.shippingCost",
   "pricing.minOrderValue",
+  "pricing.importCost",
+  "fulfillment.shipsFrom",
   "fulfillment.deliversToDestination",
   "fulfillment.deliveryDays",
   "fulfillment.stock",
@@ -85,10 +87,20 @@ const VALUE_CHECKS: Record<EvidenceField, (v: unknown) => boolean> = {
   "payment.terms": isTerms,
   "payment.requiresBusinessVerification": isBool,
   "reliability.sampleTested": isBool,
+  "pricing.importCost": isNonNegNumber,
+  "fulfillment.shipsFrom": (v) => typeof v === "string" && /^[A-Z]{2}$/.test(v),
 };
 
+/** Prüfdatum: echtes Kalenderdatum (kein 31.02.) und nicht in der Zukunft (1 Tag Toleranz für Zeitzonen). */
+function isValidCheckDate(value: unknown, today: Date): boolean {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) return false;
+  return date.getTime() <= today.getTime() + 24 * 60 * 60 * 1000;
+}
+
 /** Prüft den Inhalt der Nachweisdatei; ungültige Einträge werden mit Grund verworfen. */
-export function validateEvidence(raw: unknown): { entries: EvidenceEntry[]; errors: string[] } {
+export function validateEvidence(raw: unknown, today: Date = new Date()): { entries: EvidenceEntry[]; errors: string[] } {
   const errors: string[] = [];
   const list = Array.isArray(raw) ? raw : (raw as { entries?: unknown })?.entries;
   if (!Array.isArray(list)) return { entries: [], errors: raw === undefined ? [] : ["Nachweisdatei: erwartet eine Liste „entries“."] };
@@ -102,9 +114,7 @@ export function validateEvidence(raw: unknown): { entries: EvidenceEntry[]; erro
     else if (!VALUE_CHECKS[e.field as EvidenceField](e.value)) problems.push(`Wert passt nicht zu ${e.field}`);
     if (!isText(e?.document)) problems.push("document (Bezeichnung des Nachweises) fehlt");
     if (!isText(e?.checkedBy)) problems.push("checkedBy fehlt");
-    if (typeof e?.checkedAt !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(e.checkedAt) || Number.isNaN(Date.parse(e.checkedAt))) {
-      problems.push("checkedAt fehlt oder ist kein Datum (YYYY-MM-DD)");
-    }
+    if (!isValidCheckDate(e?.checkedAt, today)) problems.push("checkedAt fehlt, ist kein gültiges Datum (YYYY-MM-DD) oder liegt in der Zukunft");
     if (problems.length) errors.push(`${where}: ${problems.join("; ")}.`);
     else entries.push(e as EvidenceEntry);
   });
@@ -116,13 +126,23 @@ const EVIDENCE_LABELS: Partial<Record<EvidenceField, string>> = {
   "pricing.unitPrice": "Einkaufspreis",
   "pricing.shippingCost": "Versandkosten",
   "pricing.minOrderValue": "Mindestbestellwert",
+  "pricing.importCost": "Importkosten",
+  "fulfillment.shipsFrom": "Versandland",
   "fulfillment.deliversToDestination": "Lieferung nach DE",
   "fulfillment.deliveryDays": "Lieferzeit",
   "fulfillment.stock": "Lieferantenbestand",
   "dropshipping.supported": "Direktversand",
   "dropshipping.blindShipping": "Neutraler Versand",
   "payment.terms": "Zahlungsbedingungen",
+  "identity.match": "Produktidentität",
+  "safety.ceMarking": "CE-Kennzeichnung",
+  "safety.euResponsiblePerson": "Verantwortliche Person EU",
+  "safety.safetyInformationDe": "Sicherheitshinweise DE",
+  "reliability.sampleTested": "Geprüftes Muster",
 };
+
+/** Nachweise, die an den geprüften Artikel gebunden sind: Ändert der Lieferant ihn, verlieren sie ihre Gültigkeit. */
+const ARTICLE_BOUND = (field: EvidenceField) => field.startsWith("identity.") || field.startsWith("safety.") || field === "reliability.sampleTested";
 
 /** Angabe der Preisliste, mit der ein Nachweis übereinstimmen muss (nur Felder, die eine Preisliste liefert). */
 function statedFact(q: SupplierQuote, field: EvidenceField): Fact<unknown> | undefined {
@@ -135,6 +155,8 @@ function statedFact(q: SupplierQuote, field: EvidenceField): Fact<unknown> | und
       return q.pricing.shippingCost;
     case "pricing.minOrderValue":
       return q.pricing.minOrderValue;
+    case "fulfillment.shipsFrom":
+      return q.fulfillment.shipsFrom;
     case "fulfillment.deliversToDestination":
       return q.fulfillment.deliversToDestination;
     case "fulfillment.deliveryDays":
@@ -156,20 +178,49 @@ function statedFact(q: SupplierQuote, field: EvidenceField): Fact<unknown> | und
  * Wendet die Nachweise auf ein importiertes Angebot an. Nur Nachweise für genau dieses Angebot und genau
  * dieses Produkt (GTIN) zählen; alles andere bleibt unverändert.
  *
- * Widerspricht ein Nachweis der aktuellen Preisliste (z. B. Preis, Bestand oder Zahlungsbedingung haben sich seit der
- * Prüfung geändert), wird er NICHT angewendet: Die Angabe bleibt „vom Lieferanten angegeben“ und der Widerspruch
- * wird gemeldet. Ein alter Nachweis kann so nie eine neuere Lieferantenangabe überdecken.
+ * Nicht angewendet (Angabe bleibt „vom Lieferanten angegeben“ bzw. „fehlt“, der Grund wird gemeldet) wird ein Nachweis,
+ * - der der aktuellen Preisliste widerspricht (z. B. Preis, Bestand, Zahlungsbedingung seit der Prüfung geändert),
+ * - der einem anderen Nachweis zum selben Feld widerspricht (keiner der beiden gilt),
+ * - der Identität, Sicherheit oder Muster betrifft und älter ist als die letzte Änderung des Artikels laut Preisliste
+ *   (Bezeichnung, Marke, Herstellernummer oder GTIN) – geprüft wurde dann womöglich ein anderer Artikel.
+ * Ein alter Nachweis kann so nie eine neuere Lieferantenangabe überdecken.
  */
-export function applyEvidence(quote: SupplierQuote, offerKey: string, productGtin: string | undefined, entries: EvidenceEntry[]): SupplierQuote {
+export function applyEvidence(
+  quote: SupplierQuote,
+  offerKey: string,
+  productGtin: string | undefined,
+  entries: EvidenceEntry[],
+  options: { articleChangedAt?: string } = {},
+): SupplierQuote {
   const relevant = entries.filter((e) => e.offerKey === offerKey && productGtin !== undefined && e.productGtin === productGtin);
   if (!relevant.length) return quote;
   const q: SupplierQuote = structuredClone(quote);
   const conflicts: string[] = [];
+  const label = (field: EvidenceField) => EVIDENCE_LABELS[field] ?? field;
+
+  // Widersprüchliche Nachweise zum selben Feld heben sich auf (Unterlagen werden gesammelt, nicht verglichen).
+  const valuesByField = new Map<EvidenceField, Set<string>>();
   for (const e of relevant) {
+    if (e.field === "safety.document") continue;
+    valuesByField.set(e.field, (valuesByField.get(e.field) ?? new Set()).add(stableJson(e.value)));
+  }
+  const contradictory = new Set([...valuesByField].filter(([, values]) => values.size > 1).map(([field]) => field));
+  for (const field of contradictory) conflicts.push(`Nachweise zu ${label(field)} widersprechen sich – keiner angewendet, bitte klären.`);
+  // Prüfdaten sind Kalendertage (Berlin). Ein Nachweis vom Tag der Änderung ist nicht eindeutig „danach“ – er gilt nicht.
+  const changedOn = options.articleChangedAt
+    ? new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin" }).format(new Date(options.articleChangedAt))
+    : undefined;
+
+  for (const e of relevant) {
+    if (contradictory.has(e.field)) continue;
+    if (changedOn && ARTICLE_BOUND(e.field) && e.checkedAt <= changedOn) {
+      conflicts.push(`Nachweis „${e.document}“ (${e.checkedAt}) zu ${label(e.field)} wurde nicht nach der Artikeländerung vom ${changedOn} geprüft – nicht angewendet, bitte neu prüfen.`);
+      continue;
+    }
     const stated = statedFact(quote, e.field);
     if (stated && stated.status !== "missing" && stableJson(stated.value) !== stableJson(e.value)) {
       conflicts.push(
-        `Nachweis „${e.document}“ (${e.checkedAt}) zu ${EVIDENCE_LABELS[e.field] ?? e.field} widerspricht der aktuellen Preisliste – nicht angewendet, bitte neu prüfen.`,
+        `Nachweis „${e.document}“ (${e.checkedAt}) zu ${label(e.field)} widerspricht der aktuellen Preisliste – nicht angewendet, bitte neu prüfen.`,
       );
       continue;
     }
@@ -201,6 +252,12 @@ export function applyEvidence(quote: SupplierQuote, offerKey: string, productGti
         break;
       case "pricing.minOrderValue":
         q.pricing.minOrderValue = fact(e.value as number);
+        break;
+      case "pricing.importCost":
+        q.pricing.importCost = fact(e.value as number);
+        break;
+      case "fulfillment.shipsFrom":
+        q.fulfillment.shipsFrom = fact(e.value as string);
         break;
       case "fulfillment.deliversToDestination":
         q.fulfillment.deliversToDestination = fact(e.value as boolean);

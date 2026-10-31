@@ -66,6 +66,8 @@ export interface ImportLogEntry {
   synthetic: boolean;
   confirmationCode: string;
   counts: { new: number; changed: number; unchanged: number; rejected: number; notInFile: number };
+  /** Lieferanten mit mindestens einer Zeile in dieser Datei (gültig oder abgelehnt) – für „nicht mehr aktuell“ */
+  suppliers?: string[];
 }
 
 export interface OfferStore {

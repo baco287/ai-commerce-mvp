@@ -8,6 +8,7 @@ import { SAFETY_SWITCHES } from "@/lib/config/budget";
 import type { Product } from "@/lib/types";
 import type { QuoteEvaluation, RecommendationKind, SupplierComparison } from "./compare";
 import type { FinancingStatus } from "./financing";
+import { shipsFromEu } from "./eligibility";
 import { assessFunding, type FundingAssessment } from "./funding";
 import { factLevel, factValue, type Fact, type FactLevel, type FactStatus, type ProductQuery } from "./model";
 import { toPurchaseGuardTerms } from "./purchase-bridge";
@@ -216,6 +217,8 @@ function criticalFacts(e: QuoteEvaluation, query: ProductQuery): Fact<unknown>[]
     q.dropshipping.supported,
     q.pricing.unitPrice,
     q.pricing.shippingCost,
+    q.fulfillment.shipsFrom,
+    ...(shipsFromEu(q) ? [] : [q.pricing.importCost]),
     q.fulfillment.deliversToDestination,
     q.fulfillment.deliveryDays,
     q.fulfillment.stock,

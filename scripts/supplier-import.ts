@@ -87,7 +87,9 @@ function report(plan: ImportPlan) {
       for (const ch of c.changes) log(`    ${ch.label}: ${fmt(ch.before)} → ${fmt(ch.after)}`);
     }
   }
-  if (plan.notInFile.length) log(`Nicht in dieser Liste, bleiben unverändert erhalten: ${plan.notInFile.join(", ")}`);
+  if (plan.notInFile.length) {
+    log(`Nicht (gültig) in dieser Liste – bleiben gespeichert, gelten nach der Übernahme aber als nicht mehr aktuell und werden im Scout ausgeschlossen: ${plan.notInFile.join(", ")}`);
+  }
   const c = plan.counts;
   log();
   log(`Zeilen ${c.rows}: ${c.valid} gültig, ${c.rejected} abgelehnt, ${c.duplicates} Dubletten → ${c.new} neu, ${c.changed} geändert, ${c.unchanged} unverändert`);

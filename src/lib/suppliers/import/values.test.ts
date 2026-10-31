@@ -12,7 +12,18 @@ describe("Werteprüfung für Preislisten", () => {
     expect(ok(parseMoney("1.234,50 €"))).toBe(1234.5);
     expect(ok(parseMoney("1,234.50"))).toBe(1234.5);
     expect(ok(parseMoney("EUR 3"))).toBe(3);
-    for (const bad of ["abc", "12,500", "1.234", "12,3,4", "1.2.3,4", "12,12345", ""]) expect(isError(parseMoney(bad)), bad).toBe(true);
+    for (const bad of ["abc", "12,500", "1.234", "12,3,4", "1.2.3,4", "12,12345", "", "12€50", "12 EUR 50", "1234.567.890", ".123.456", "1.23.456"]) expect(isError(parseMoney(bad)), bad).toBe(true);
+    expect(ok(parseMoney("12,50EUR"))).toBe(12.5);
+  });
+
+  it("akzeptiert jeden Cent-Betrag von 0,01 bis 999,99 exakt (keine Gleitkomma-Fehler)", () => {
+    for (let cents = 1; cents < 100000; cents++) {
+      const text = `${Math.floor(cents / 100)},${String(cents % 100).padStart(2, "0")}`;
+      const r = parseMoney(text);
+      if (!("value" in r) || Math.round(r.value * 100) !== cents) throw new Error(`${text} → ${JSON.stringify(r)}`);
+    }
+    expect(ok(parseMoney("19,99"))).toBe(19.99);
+    expect(ok(parseMoney("0,0725"))).toBe(0.0725);
   });
 
   it("liest Mengen, Ja/Nein und Lieferzeiten streng", () => {
@@ -60,6 +71,8 @@ describe("Werteprüfung für Preislisten", () => {
     expect(ok(parseDate("31.10.2026"))).toBe("2026-10-31");
     expect(ok(parseDate("2026-10-31"))).toBe("2026-10-31");
     expect(isError(parseDate("31.02.2026"))).toBe(true);
+    expect(isError(parseDate("2026-10-31xyz"))).toBe(true);
+    expect(isError(parseDate("2026-10-31 bis 2026-12-31"))).toBe(true);
     expect(ok(parseCountry("Deutschland"))).toBe("DE");
     expect(ok(parseCountry("pl"))).toBe("PL");
     expect(ok(parseCountry("CN"))).toBe("CN");
@@ -82,6 +95,10 @@ describe("CSV-Parser", () => {
     expect(t.rows.map((r) => r.line)).toEqual([2, 4]);
     expect(parseCsv("a,b\n1,2").delimiter).toBe(",");
     expect(parseCsv('a;b\n1;"offen').errors[0]).toMatch(/nicht geschlossen/);
+    // Text nach schließendem oder einzelnes Anführungszeichen ist ein Strukturfehler – nie „"1"7“ → 17
+    expect(parseCsv('a;b;c\nA;"1"7;"9"50').errors[0]).toMatch(/Zeile 2: Anführungszeichen fehlerhaft/);
+    expect(parseCsv('a;b\nx;ab"c').errors[0]).toMatch(/Zeile 2/);
+    expect(parseCsv('a;b\n"x" ;"y"').errors).toEqual([]);
   });
 });
 

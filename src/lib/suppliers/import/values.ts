@@ -10,7 +10,8 @@ const clean = (raw: string) => raw.trim().replace(/\s+/g, " ");
 
 /** Betrag in EUR: „12,50“, „12.50“, „1.234,50“, „1,234.50“, „12,50 €“. Mehrdeutig („12,500“) → Fehler. */
 export function parseMoney(raw: string): Parsed<number> {
-  let s = clean(raw).replace(/€|eur/gi, "").replace(/\s/g, "");
+  // Währung nur als Vor- oder Nachsatz („12,50 €“, „EUR 12,50“) – „12€50“ wird abgelehnt statt zu 1250 zu werden.
+  let s = clean(raw).replace(/^(€|eur)\s*|\s*(€|eur)$/gi, "").replace(/\s/g, "");
   if (s === "") return fail("leer");
   if (!/^-?[\d.,]+$/.test(s)) return fail(`„${raw.trim()}“ ist kein Betrag`);
   const lastComma = s.lastIndexOf(",");
@@ -28,7 +29,7 @@ export function parseMoney(raw: string): Parsed<number> {
     const parts = s.split(sep);
     if (parts.length > 2) {
       // nur Tausendertrennzeichen, z. B. 1.234.567
-      if (!parts.slice(1).every((p) => p.length === 3)) return fail(`„${raw.trim()}“ ist mehrdeutig`);
+      if (!/^-?\d{1,3}$/.test(parts[0]) || !parts.slice(1).every((p) => /^\d{3}$/.test(p))) return fail(`„${raw.trim()}“ ist mehrdeutig`);
       s = parts.join("");
     } else if (parts[1].length === 3) {
       return fail(`„${raw.trim()}“ ist mehrdeutig (Tausender- oder Dezimaltrennzeichen?)`);
@@ -36,9 +37,10 @@ export function parseMoney(raw: string): Parsed<number> {
       s = parts.join(".");
     }
   }
+  // Nachkommastellen am Text zählen – nicht per Gleitkomma (19,99 × 10000 ist nicht exakt 199900).
+  if (/\.\d{5,}$/.test(s)) return fail(`„${raw.trim()}“ hat mehr als 4 Nachkommastellen`);
   const value = Number(s);
   if (!Number.isFinite(value)) return fail(`„${raw.trim()}“ ist kein Betrag`);
-  if (Math.round(value * 10000) !== value * 10000) return fail(`„${raw.trim()}“ hat mehr als 4 Nachkommastellen`);
   return { value };
 }
 
@@ -104,7 +106,7 @@ export function parsePaymentTerms(raw: string): Parsed<SupplierPaymentTerms> {
 export function parseDate(raw: string): Parsed<string> {
   const s = clean(raw);
   let y: number, m: number, d: number;
-  let match = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  let match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
   if (match) [y, m, d] = [Number(match[1]), Number(match[2]), Number(match[3])];
   else if ((match = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(s))) [d, m, y] = [Number(match[1]), Number(match[2]), Number(match[3])];
   else return fail(`„${raw.trim()}“ ist kein Datum (erwartet 2026-10-31 oder 31.10.2026)`);

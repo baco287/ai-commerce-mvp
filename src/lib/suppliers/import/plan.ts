@@ -38,6 +38,8 @@ export interface ImportPlan {
   unchanged: string[];
   /** Bereits gespeicherte Angebote derselben Lieferanten, die in dieser Datei fehlen – bleiben erhalten */
   notInFile: string[];
+  /** Lieferanten mit mindestens einer Zeile in der Datei (gültig oder abgelehnt) */
+  suppliers: string[];
   /** Gültige Angebote ohne bzw. mit unbekannter GTIN – werden gespeichert, aber keinem Produkt zugeordnet */
   withoutGtin: string[];
   unknownGtin: string[];
@@ -50,6 +52,30 @@ export interface ImportPlan {
 }
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
+
+/** Gruppiert in linearer Zeit (kein Kopieren je Element – große Dateien bleiben schnell). */
+function groupBy<T>(items: T[], keyOf: (item: T) => string): Map<string, T[]> {
+  const groups = new Map<string, T[]>();
+  for (const item of items) {
+    const key = keyOf(item);
+    const group = groups.get(key);
+    if (group) group.push(item);
+    else groups.set(key, [item]);
+  }
+  return groups;
+}
+
+/** Höchstens fünf andere Zeilennummern je Meldung – sonst wächst die Ausgabe quadratisch mit der Gruppengröße. */
+const MAX_LISTED_LINES = 5;
+function otherLines(group: { line: number }[], self: { line: number }): string {
+  const others: number[] = [];
+  for (const r of group) {
+    if (r === self) continue;
+    if (others.length === MAX_LISTED_LINES) return `${others.join(", ")} und ${group.length - 1 - MAX_LISTED_LINES} weiteren`;
+    others.push(r.line);
+  }
+  return others.join(", ");
+}
 
 /** Stabile JSON-Darstellung (sortierte Schlüssel) für Vergleiche und Prüfsummen. */
 export function stableJson(value: unknown): string {
@@ -137,31 +163,28 @@ export function planImport(input: {
   const rows = structureErrors.length ? [] : readRows(table, cols, mapping, input.importedAt);
 
   // Dubletten innerhalb der Datei: identisch → nur die erste zählt; widersprüchlich → alle abgelehnt.
-  const byKey = new Map<string, RowResult[]>();
-  for (const r of rows) if (r.status === "valid" && r.key) byKey.set(r.key, [...(byKey.get(r.key) ?? []), r]);
+  const byKey = groupBy(rows.filter((r) => r.status === "valid" && r.key), (r) => r.key!);
   const duplicates: ImportPlan["duplicates"] = [];
   for (const [key, group] of byKey) {
     if (group.length < 2) continue;
-    const identical = group.every((r) => stableJson(r.data) === stableJson(group[0].data));
+    const first = stableJson(group[0].data);
+    const identical = group.every((r) => stableJson(r.data) === first);
     duplicates.push({ key, lines: group.map((r) => r.line), identical });
     group.forEach((r, i) => {
       if (identical && i === 0) return;
       r.status = identical ? "duplicate" : "rejected";
-      const others = group.filter((o) => o !== r).map((o) => o.line).join(", ");
       if (identical) r.warnings.push(`Doppelt (gleich wie Zeile ${group[0].line}) – nur einmal übernommen.`);
-      else r.errors.push(`Widersprüchliche Dublette: gleiche Lieferanten-Artikelnummer mit anderen Angaben in Zeile ${others}.`);
+      else r.errors.push(`Widersprüchliche Dublette: gleiche Lieferanten-Artikelnummer mit anderen Angaben in Zeile ${otherLines(group, r)}.`);
     });
   }
   // Gleiche GTIN beim selben Lieferanten unter verschiedenen Artikelnummern → Hinweis (mögliche Dublette)
-  const gtinGroups = new Map<string, RowResult[]>();
-  for (const r of rows) {
-    if (r.status !== "valid" || !r.data?.gtin) continue;
-    const k = `${r.data.supplierId}|${r.data.gtin}`;
-    gtinGroups.set(k, [...(gtinGroups.get(k) ?? []), r]);
-  }
+  const gtinGroups = groupBy(
+    rows.filter((r) => r.status === "valid" && r.data?.gtin),
+    (r) => `${r.data!.supplierId}|${r.data!.gtin}`,
+  );
   for (const group of gtinGroups.values()) {
     if (group.length < 2) continue;
-    for (const r of group) r.warnings.push(`Gleiche GTIN wie Zeile ${group.filter((o) => o !== r).map((o) => o.line).join(", ")} unter anderer Artikelnummer – mögliche Dublette.`);
+    for (const r of group) r.warnings.push(`Gleiche GTIN wie Zeile ${otherLines(group, r)} unter anderer Artikelnummer – mögliche Dublette.`);
   }
 
   const valid = rows.filter((r): r is RowResult & { key: string; data: ImportedOfferData } => r.status === "valid" && !!r.key && !!r.data);
@@ -195,7 +218,9 @@ export function planImport(input: {
       else unchanged.push(r.key);
     }
   }
-  const suppliersInFile = new Set(valid.map((r) => r.data.supplierId));
+  // Lieferanten der Datei – auch solche, deren Zeilen alle abgelehnt wurden: Ihre gespeicherten Angebote sind danach
+  // nicht mehr aktuell.
+  const suppliersInFile = new Set(rows.map((r) => r.data?.supplierId ?? r.supplierId).filter((id): id is string => !!id));
   const keysInFile = new Set(valid.map((r) => r.key));
   const notInFile = Object.values(input.store.offers)
     .filter((o) => suppliersInFile.has(o.data.supplierId) && !keysInFile.has(o.key))
@@ -223,6 +248,7 @@ export function planImport(input: {
     changed,
     unchanged,
     notInFile,
+    suppliers: [...suppliersInFile].sort(),
     withoutGtin,
     unknownGtin,
     duplicates,
@@ -281,6 +307,7 @@ export function applyImportPlan(plan: ImportPlan, store: OfferStore): OfferStore
     synthetic: plan.synthetic,
     confirmationCode: plan.confirmationCode,
     counts: { new: plan.counts.new, changed: plan.counts.changed, unchanged: plan.counts.unchanged, rejected: plan.counts.rejected, notInFile: plan.counts.notInFile },
+    suppliers: plan.suppliers,
   };
   return { version: 1, offers, imports: [...store.imports, entry] };
 }

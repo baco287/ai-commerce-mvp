@@ -54,7 +54,8 @@ Ausbauschritt, sobald es eine App gibt (siehe unten).
 - Der Read-only-Client bleibt unverändert und lehnt Mutationen weiter ab; Schreiben ist ein eigener Weg.
 - Auslösen nur serverseitig und nur hinter einem Login (Server Action) – nie öffentlich erreichbar.
 - `src/lib/guards/safety.test.ts` bewusst erweitern: Netzwerkzugriff ist heute nur in `server/auth.ts` und
-  `server/admin-client.ts` erlaubt; die neue Datei wird dort explizit eingetragen.
+  `server/admin-client.ts` erlaubt (plus `src/test/setup.ts`, das Netzwerk in Tests sperrt); die neue Datei wird
+  dort explizit eingetragen.
 - `SAFETY_SWITCHES.shopifyWriteEnabled` auf `true` – als eigener, reviewter Commit.
 
 ### 3. Produktanlage durch den Store Manager Agent

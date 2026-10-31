@@ -11,7 +11,24 @@ import type { StoredOffer } from "./types";
 
 export const PRICE_LIST_ADAPTER_ID = "price-list";
 
-export function storedOfferToQuote(offer: StoredOffer, query: ProductQuery, evidence: EvidenceEntry[] = []): SupplierQuote {
+/** Identitätsmerkmale eines Artikels – ändern sie sich, gelten Identitäts- und Sicherheitsnachweise nicht mehr. */
+const articleIdentity = (d: StoredOffer["data"]) => JSON.stringify([d.title, d.brand ?? null, d.mpn ?? null, d.gtin ?? null]);
+
+/** Zeitpunkt der letzten Änderung des Artikels (laut Historie), undefined wenn seit dem ersten Import unverändert. */
+export function articleChangedAt(offer: StoredOffer): string | undefined {
+  const versions = [...offer.history.map((h) => h.data), offer.data];
+  for (let i = offer.history.length - 1; i >= 0; i--) {
+    if (articleIdentity(versions[i]) !== articleIdentity(versions[i + 1])) return offer.history[i].replacedAt;
+  }
+  return undefined;
+}
+
+export function storedOfferToQuote(
+  offer: StoredOffer,
+  query: ProductQuery,
+  evidence: EvidenceEntry[] = [],
+  options: { outdated?: boolean } = {},
+): SupplierQuote {
   const d = offer.data;
   const p = offer.provenance;
   const source = `Preisliste ${d.supplierName}: ${p.file}, Zeile ${p.row}${d.supplierUpdatedAt ? `, Stand ${d.supplierUpdatedAt}` : ""}`;
@@ -84,7 +101,8 @@ export function storedOfferToQuote(offer: StoredOffer, query: ProductQuery, evid
       importedAt: p.importedAt,
       supplierUpdatedAt: d.supplierUpdatedAt,
       synthetic: p.synthetic,
+      ...(options.outdated ? { outdated: true } : {}),
     },
   };
-  return applyEvidence(quote, offer.key, query.gtin, evidence);
+  return applyEvidence(quote, offer.key, query.gtin, evidence, { articleChangedAt: articleChangedAt(offer) });
 }

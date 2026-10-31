@@ -23,6 +23,8 @@ export interface RowResult {
   status: "valid" | "rejected" | "duplicate";
   key?: string;
   data?: ImportedOfferData;
+  /** Lieferant der Zeile, sobald der Name lesbar ist – auch bei abgelehnten Zeilen */
+  supplierId?: string;
   errors: string[];
   warnings: string[];
 }
@@ -138,7 +140,8 @@ export function readRows(table: CsvTable, cols: ColumnResolution, mapping: Colum
     if (absent.length) warnings.push(`Keine Angabe (bleibt „fehlend“): ${absent.map((f) => FIELD_SPECS[f].label).join(", ")}.`);
 
     if (errors.length || supplierName === undefined || supplierSku === undefined || title === undefined || unitPrice === undefined || !currency) {
-      return { line: row.line, status: "rejected", errors, warnings };
+      const rejectedSupplier = supplierName === undefined ? "" : supplierIdOf(supplierName);
+      return { line: row.line, status: "rejected", ...(rejectedSupplier ? { supplierId: rejectedSupplier } : {}), errors, warnings };
     }
     const supplierId = supplierIdOf(supplierName);
     if (!supplierId) return { line: row.line, status: "rejected", errors: ["Lieferantenname ergibt keine gültige Kennung."], warnings };

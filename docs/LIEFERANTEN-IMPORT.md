@@ -13,7 +13,8 @@ lockern. Er ist ein weiterer Adapter der bestehenden `SupplierAdapter`-Schnittst
   Sicherheitshinweise, Lieferfähigkeit und verbindliche Zahlungsbedingungen werden erst durch einen unabhängigen,
   produktspezifischen Nachweis „geprüft“.
 - **Kein Datenverlust.** Ein Import löscht nie: Geänderte Angebote behalten ihre frühere Fassung in der Historie,
-  Angebote, die in einer neuen Liste fehlen, bleiben unverändert erhalten. Vor jedem Schreiben wird der vorige Stand gesichert.
+  Angebote, die in einer neuen Liste fehlen (oder dort abgelehnt werden), bleiben gespeichert, gelten aber als
+  „nicht mehr aktuell“ und werden im Scout ausgeschlossen. Vor jedem Schreiben wird der vorige Stand gesichert.
 - **Echte Daten bleiben privat.** Speicher und Nachweise liegen in `.data/suppliers/` (von Git ignoriert) – das
   Repository ist öffentlich.
 
@@ -47,10 +48,30 @@ beim nächsten Neuladen. Im Produktions-Build werden die Seiten vorab erzeugt �
 Übernommen wird nur, wenn die Datei strukturell in Ordnung ist (alle Pflichtspalten, lesbares CSV). Abgelehnte
 Zeilen werden nicht übernommen, die gültigen schon; der Testlauf zeigt jede abgelehnte Zeile mit Grund.
 
+## Sicherung und Wiederherstellung
+
+Vor jeder Übernahme wird der bisherige Stand nach `.data/suppliers/backups/offers-<Import-ID>.json` kopiert; der
+neue Stand wird atomar geschrieben (temporäre Datei, dann Umbenennen). Zusätzlich behält jedes geänderte Angebot
+seine früheren Fassungen in `history`.
+
+Einen Import rückgängig machen (lokal, von Hand):
+
+1. Mit `npm run suppliers:import -- --status` den betroffenen Import bestimmen.
+2. Die Sicherung **dieses** Imports (`backups/offers-<Import-ID>.json`) über `.data/suppliers/offers.json` kopieren –
+   sie enthält den Stand unmittelbar davor. **Achtung:** Alle späteren Importe gehen dabei ebenfalls verloren – vorher
+   die aktuelle `offers.json` zusätzlich kopieren.
+3. `npm run suppliers:import -- --status` erneut ausführen und prüfen.
+
+Nicht gleichzeitig zwei Importe ausführen: Der Bestätigungscode erkennt einen zwischenzeitlich geänderten Speicher
+nur beim Start des Befehls.
+
 ## Unterstützte CSV-Formate
 
 - Trennzeichen `;`, `,` oder Tabulator (automatisch erkannt), Anführungszeichen nach RFC 4180, UTF-8 mit oder ohne BOM,
   Zeilenenden LF oder CRLF. Leere Zeilen werden übersprungen.
+- Fehlerhafte Anführungszeichen (Text nach dem schließenden Zeichen wie `"1"7`, einzelnes `"` mitten im Feld) sind ein
+  Strukturfehler – die Datei wird nicht übernommen, statt Werte still zusammenzusetzen.
+- Beträge: Währung nur vor oder nach der Zahl (`12,50 €`, `EUR 12,50`); `12€50` wird abgelehnt.
 - Erste Zeile = Spaltenköpfe. Groß-/Kleinschreibung, Umlaute (`ä` = `ae`), Satzzeichen und Leerzeichen sind egal.
 - Jede Zeile muss genau so viele Spalten haben wie die Kopfzeile.
 - Kodierung **UTF-8**. Excel: „Speichern unter → CSV UTF-8 (durch Trennzeichen getrennt)“. Dateien in anderer
@@ -164,15 +185,21 @@ Nachweis vorliegt.
   CE-Erklärung für Produkt A macht Produkt B nie „geprüft“.
 - Nachweisbare Felder: `identity.match`, `identity.gtin`, `safety.ceMarking`, `safety.euResponsiblePerson`,
   `safety.safetyInformationDe`, `safety.document` (z. B. `"Herstellerangaben (GPSR)"` – deckt die gleichnamige
-  Pflichtunterlage ab), `pricing.unitPrice`, `pricing.shippingCost`, `pricing.minOrderValue`,
-  `fulfillment.deliversToDestination`, `fulfillment.deliveryDays` (`{"min":2,"max":4}`), `fulfillment.stock`,
+  Pflichtunterlage ab), `pricing.unitPrice`, `pricing.shippingCost`, `pricing.minOrderValue`, `pricing.importCost`,
+  `fulfillment.shipsFrom` (ISO-Code, z. B. `"PL"`), `fulfillment.deliversToDestination`, `fulfillment.deliveryDays` (`{"min":2,"max":4}`), `fulfillment.stock`,
   `fulfillment.tracking`, `dropshipping.supported`, `dropshipping.blindShipping`, `dropshipping.orderChannel`
   (`api`/`portal`/`email`), `payment.terms` (`{"kind":"net_terms","days":30}` oder `{"kind":"prepayment"}`),
   `payment.requiresBusinessVerification`, `reliability.sampleTested`.
-- Ungültige Einträge werden mit Grund verworfen (`npm run suppliers:import -- --status`) und nie angewendet.
+- Ungültige Einträge werden mit Grund verworfen (`npm run suppliers:import -- --status`) und nie angewendet –
+  auch ein Prüfdatum, das es nicht gibt (`2026-02-31`) oder das in der Zukunft liegt.
 - **Veraltete Nachweise:** Widerspricht ein Nachweis der aktuellen Preisliste (z. B. Preis, Bestand oder
   Zahlungsbedingung haben sich seit der Prüfung geändert), wird er nicht angewendet. Die Angabe bleibt „vom Lieferanten
   angegeben“, und `/lieferanten` zeigt den Widerspruch als offenen Punkt. Dann neu prüfen und den Nachweis aktualisieren.
+- **Widersprüchliche Nachweise:** Zwei Nachweise zum selben Feld mit unterschiedlichem Wert heben sich auf – keiner gilt,
+  bis der Widerspruch geklärt ist (alten Eintrag entfernen).
+- **Artikeländerung:** Ändert der Lieferant Bezeichnung, Marke, Herstellernummer oder GTIN eines Angebots, gelten
+  Identitäts-, Sicherheits- und Musternachweise, die **vor oder am Tag** dieser Änderung geprüft wurden, nicht mehr – geprüft wurde
+  dann womöglich ein anderer Artikel. Eine reine Preis- oder Bestandsänderung berührt sie nicht.
 - Ob CE überhaupt nötig ist, entscheidet das Produkt (`ProductQuery.safety.ceRequired`), welche Unterlagen nötig
   sind, `requiredDocuments` – beides produktspezifisch zu prüfen.
 
@@ -181,9 +208,11 @@ Nachweis vorliegt.
 1. **Zuordnung nur über die GTIN.** Angebote ohne oder mit unbekannter GTIN erscheinen bei keinem Produkt.
 2. **Gleiche Eignungsprüfung wie für alle Angebote** (`checkEligibility`): Produktidentität, CE/GPSR/Sicherheitshinweise,
    Dropshipping, Lieferung nach DE, Bestand, Lieferzeit, Mindestabnahme, **Mindestbestellwert** (darf keinen
-   Vorratskauf erzwingen), Kosten. Zusätzlich gilt für Preislisten: **Einkaufspreis, Versandkosten, Lieferung nach DE,
-   Lieferzeit und Bestand** müssen per Nachweis geprüft sein – eine Selbstauskunft wird nie Kalkulationsbasis. Ohne
-   Nachweise wird ein Preislisten-Angebot deshalb **ausgeschlossen** – mit Gründen.
+   Vorratskauf erzwingen), Kosten. Zusätzlich gilt für Preislisten: **Einkaufspreis, Versandkosten, Versandland,
+   Lieferung nach DE, Lieferzeit und Bestand** müssen per Nachweis geprüft sein, bei Versand von außerhalb der EU auch die
+   **Importkosten** – eine Selbstauskunft wird nie Kalkulationsbasis. Angebote, die in der letzten Liste ihres
+   Lieferanten fehlen oder dort abgelehnt wurden, sind „nicht mehr aktuell“. Ohne Nachweise bzw. nicht aktuell wird ein
+   Preislisten-Angebot **ausgeschlossen** – mit Gründen.
 3. **Kennzeichnung** je Angebot: `DEMO` (Demo- und synthetische Testdaten), `ECHTE QUELLE, UNGEPRÜFT`,
    `NACHWEISE GEPRÜFT` (alle kritischen Angaben belegt und keine Pflichtunterlage offen), zusätzlich `AUSGESCHLOSSEN`.
 4. **Finanzierung** (`funding.ts`): Zahlungsziel bzw. Vorkasse, Fälligkeit, Auszahlung des Kundengelds
@@ -194,8 +223,8 @@ Nachweis vorliegt.
    `false`, der automatische Einkauf gesperrt, und für die Einkaufssperre gilt ein Angebot bis zur belegten
    Zahlungsbedingung als Vorkasse.
 6. **Kalkulationsbasis** (Shopify „Kosten pro Artikel“) ist weiterhin der günstigste **geeignete** Lieferant. Ein
-   billigeres Angebot ändert sie nur, wenn Einkaufspreis, Versandkosten, Lieferung nach DE, Lieferzeit und Bestand per
-   Nachweis geprüft sind (Test: `scout-integration.test.ts`). Offene Zahlungsbedingungen oder Pflichtunterlagen
+   billigeres Angebot ändert sie nur, wenn es aktuell ist und Einkaufspreis, Versandkosten, Versandland (ggf.
+   Importkosten), Lieferung nach DE, Lieferzeit und Bestand per Nachweis geprüft sind (Test: `scout-integration.test.ts`). Offene Zahlungsbedingungen oder Pflichtunterlagen
    verhindern das nicht, bleiben aber sichtbar: Kennzeichnung `ECHTE QUELLE, UNGEPRÜFT`, Finanzierung als
    Vorfinanzierung, offene Unterlagen als Hinweis – wie bei den Demo-Angeboten.
    Ein vollständig geprüftes, günstigeres Angebot kann Kalkulationsbasis werden. Bestehende Shopify-Produkte ändert der
