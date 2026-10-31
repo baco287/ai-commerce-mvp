@@ -18,12 +18,13 @@ function sourceFiles(dir: string): string[] {
 }
 
 describe("MVP-Sicherheitsgrenzen", () => {
-  it("hat alle Sicherheitsschalter ausgeschaltet", () => {
+  it("hat alle Echtgeld-Schalter ausgeschaltet; Shopify-Schreibzugriff ist bewusst freigegeben", () => {
     expect(SAFETY_SWITCHES).toEqual({
       autoPurchaseEnabled: false,
       realAdsEnabled: false,
       paidApiCallsEnabled: false,
-      shopifyWriteEnabled: false,
+      // Freigegeben am 31.10.2026 – nur die Positivliste in lib/shopify/write-operations.ts (siehe Tests dort).
+      shopifyWriteEnabled: true,
     });
   });
 
@@ -73,6 +74,42 @@ describe("MVP-Sicherheitsgrenzen", () => {
       .filter((f) => /process\.env/.test(readFileSync(f, "utf8")))
       .map(rel);
     expect(offenders).toEqual(ENV_ALLOWED);
+  });
+
+  // Befehle außerhalb von src/ (z. B. scripts/shopify-sync.ts) – gleiche Regeln, Pfade relativ zum Projekt.
+  const ROOT = join(SRC, "..");
+  const SCRIPTS = join(ROOT, "scripts");
+  const allFiles = () => [...sourceFiles(SRC), ...sourceFiles(SCRIPTS)];
+  const fromRoot = (f: string) => f.slice(ROOT.length + 1).replaceAll("\\", "/");
+
+  it("definiert Schreib-Operationen nur an einer Stelle (src/lib/shopify/graphql.ts) – auch anonyme", () => {
+    const offenders = allFiles()
+      .filter((f) => /\bmutation\b\s*[A-Za-z_({]/.test(readFileSync(f, "utf8")))
+      .map(fromRoot);
+    expect(offenders).toEqual(["src/lib/shopify/graphql.ts"]);
+  });
+
+  it("nutzt den Shopify-Schreib-Client nur im Befehl shopify:sync – nie im Dashboard, in keiner Importform", () => {
+    // Jede Erwähnung zählt (benannter, Namespace-, dynamischer Import, Re-Export).
+    const users = allFiles()
+      .filter((f) => /\bcreateGuardedWriteClient\b/.test(readFileSync(f, "utf8")))
+      .map(fromRoot)
+      .sort();
+    expect(users).toEqual(["scripts/shopify-sync.ts", "src/lib/shopify/server/admin-client.ts"]);
+    // Dashboard-Code (Seiten, Komponenten) darf den Admin-Client gar nicht direkt einbinden.
+    const dashboard = sourceFiles(SRC)
+      .filter((f) => /[\\/](app|components)[\\/]/.test(f))
+      .filter((f) => /server\/admin-client/.test(readFileSync(f, "utf8")))
+      .map(rel);
+    expect(dashboard).toEqual([]);
+  });
+
+  it("macht in Befehlen (scripts/) weder eigene Netzwerkaufrufe noch liest es Zugangsdaten direkt", () => {
+    const network = /\bfetch\b|XMLHttpRequest|\baxios\b|node:https?|\bWebSocket\b/;
+    const offenders = sourceFiles(SCRIPTS)
+      .filter((f) => network.test(readFileSync(f, "utf8")) || /process\.env/.test(readFileSync(f, "utf8")))
+      .map(fromRoot);
+    expect(offenders).toEqual([]);
   });
 
   it("hält den Shopify-Connector vom Browser fern", () => {

@@ -10,8 +10,13 @@ export const SAFETY_SWITCHES = Object.freeze({
   realAdsEnabled: false,
   /** Echte Aufrufe kostenpflichtiger APIs (OpenAI, Claude, Shopify Admin …) */
   paidApiCallsEnabled: false,
-  /** Schreibzugriff auf Shopify (Produkte anlegen/ändern). Auch wenn aktiv: nur Entwürfe, nie veröffentlichen. */
-  shopifyWriteEnabled: false,
+  /**
+   * Schreibzugriff auf Shopify – freigegeben am 31.10.2026, eng begrenzt auf die Positivliste in
+   * src/lib/shopify/write-operations.ts (Bestandsverfolgung, eigene Produktbilder, Demo-Bestand 0,
+   * fehlende Produkte als Entwurf). Nie veröffentlichen, nie aktivieren, nie löschen, keine Bestellungen.
+   * Läuft nur über den Befehl `npm run shopify:sync -- --apply`, nie aus dem Dashboard.
+   */
+  shopifyWriteEnabled: true,
 } as const);
 
 export const SAFETY_SWITCH_LABELS: Record<keyof typeof SAFETY_SWITCHES, string> = {

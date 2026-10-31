@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "npm run lint && npm run typecheck && npm run test",
-    "shopify:csv": "vitest run -u src/lib/shopify/csv-export.test.ts"
+    "shopify:csv": "vitest run -u src/lib/shopify/csv-export.test.ts",
+    "shopify:sync": "tsx --conditions=react-server --env-file-if-exists=.env.local scripts/shopify-sync.ts"
   },
   "dependencies": {
     "lucide-react": "^1.59.0",
@@ -28,6 +29,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
     "tailwindcss": "^4",
+    "tsx": "4.23.15",
     "typescript": "^5",
     "vitest": "^4.1.12"
   }

@@ -21,7 +21,7 @@ export default function ShopifySyncPage() {
     <>
       <PageHeader
         title="Shopify-Synchronisierung"
-        description="Vergleicht die Produkte im Shopify Dev Store mit den Daten der Kontrollzentrale. Nur lesend – es wird nichts in Shopify verändert."
+        description="Vergleicht die Produkte im Shopify Dev Store mit den Daten der Kontrollzentrale. Diese Seite liest nur – Korrekturen laufen ausschließlich über den Befehl npm run shopify:sync."
         actions={
           <Badge tone="cyan">
             <ShieldCheck className="size-3" aria-hidden /> Read-only · API {SHOPIFY_ADMIN_API_VERSION}
@@ -69,9 +69,11 @@ async function LiveSyncStatus() {
   if (status.state === "error") {
     const hint: Record<string, string> = {
       auth: "Zugangsdaten oder App-Installation prüfen (siehe docs/SHOPIFY-API-EINRICHTUNG.md).",
-      scope: "Berechtigungen der App-Version im Dev Dashboard prüfen: nur read_products und read_inventory.",
+      scope:
+        "Berechtigungen der App-Version im Dev Dashboard prüfen: erlaubt sind nur read_products, read_inventory, write_products und write_inventory.",
       network: "Internetverbindung und Store-Domain prüfen.",
       readonly: "Eine schreibende Abfrage wurde blockiert – das ist ein Programmierfehler.",
+      guard: "Eine Schutzregel hat einen Vorgang blockiert – Grund siehe oben.",
       api: "Antwort der Admin API prüfen; ggf. API-Version aktualisieren.",
       unknown: "Server neu starten und erneut versuchen.",
     };
@@ -324,7 +326,9 @@ function PipelinePreview() {
         </tbody>
       </Table>
       <p className="flex items-center gap-1.5 px-5 py-3 text-xs text-muted">
-        <PlugZap className="size-3.5" aria-hidden /> Schreibzugriff auf Shopify ist gesperrt (Sicherheitsschalter). Auch später entstehen nur Entwürfe; Veröffentlichen bleibt manuell.
+        <PlugZap className="size-3.5" aria-hidden /> Schreibzugriff ist eng freigegeben: nur Entwürfe anlegen, Bestandsverfolgung, eigene
+        Produktbilder und Demo-Bestand 0 – ausschließlich über <code className="font-mono">npm run shopify:sync</code>, nie aus dem Dashboard.
+        Veröffentlichen bleibt manuell.
       </p>
     </Card>
   );

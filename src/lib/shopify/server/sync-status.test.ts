@@ -34,6 +34,7 @@ const product = (n: number, opts: { moreVariants?: boolean } = {}) => ({
   productType: "",
   tags: [],
   featuredMedia: null,
+  media: { nodes: [] },
   variants: {
     pageInfo: { hasNextPage: opts.moreVariants ?? false },
     nodes: [{ id: `v${n}`, title: "Default Title", sku: `S-${n}`, price: "1.00", inventoryPolicy: "DENY", inventoryItem: { id: `item-${n}` }, selectedOptions: [] }],

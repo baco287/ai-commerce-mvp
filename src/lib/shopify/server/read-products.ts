@@ -28,7 +28,8 @@ interface Connection<T> {
   nodes: T[];
 }
 
-type ProductNode = Omit<ShopifyProduct, "variants"> & {
+type ProductNode = Omit<ShopifyProduct, "variants" | "hasMedia"> & {
+  media: { nodes: { id: string }[] };
   variants: {
     pageInfo: { hasNextPage: boolean };
     nodes: (Omit<ShopifyProduct["variants"][number], "inventory" | "inventoryItemId"> & { inventoryItem: { id: string } })[];
@@ -57,8 +58,9 @@ export async function readAllProducts(client: ReadOnlyAdminClient, options: { ma
     after = data.products.pageInfo.endCursor;
   }
   return {
-    products: nodes.map(({ variants, ...p }) => ({
+    products: nodes.map(({ variants, media, ...p }) => ({
       ...p,
+      hasMedia: media.nodes.length > 0,
       variants: variants.nodes.map(({ inventoryItem, ...v }) => ({ ...v, inventoryItemId: inventoryItem.id })),
     })),
     moreProducts,

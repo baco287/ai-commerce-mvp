@@ -1,19 +1,23 @@
-# Shopify-API einrichten (Read-only)
+# Shopify-API einrichten
 
-Verbindet die KI-Kontrollzentrale **nur lesend** mit dem Dev Store `yakru.myshopify.com`.
-Kosten: keine. Dauer: ca. 10 Minuten. Alle Schritte im Browser machst du selbst.
+Verbindet die KI-Kontrollzentrale mit dem Dev Store `yakru.myshopify.com`: das Dashboard **liest**,
+Korrekturen laufen eng begrenzt über den Befehl `npm run shopify:sync` (Abschnitt 6).
+Kosten: keine. Alle Schritte im Browser machst du selbst.
 
 ## Was die Verbindung darf
 
 | Darf | Darf nicht |
 | --- | --- |
-| Shop-Name, Währung und erteilte Rechte lesen | Produkte anlegen, ändern, löschen oder veröffentlichen |
-| Produkte mit Varianten, SKU, Preisen, Status und Hauptbild lesen | Bestellungen, Kunden oder Zahlungen lesen oder ändern |
-| *mit `read_inventory`:* Bestand je Standort (verfügbar, vorhanden, reserviert, im Zulauf), Bestandsverfolgung und Kosten pro Artikel lesen | Bestände oder Standorte ändern |
-| Mit den Dashboard-Daten vergleichen | Werbung, Apps oder Einstellungen ändern |
+| Shop-Name, Währung und erteilte Rechte lesen | Produkte veröffentlichen, aktivieren oder löschen |
+| Produkte mit Varianten, SKU, Preisen, Status und Bildern lesen | Bestellungen, Kunden oder Zahlungen lesen oder ändern |
+| *mit `read_inventory`:* Bestand je Standort, Bestandsverfolgung und Kosten pro Artikel lesen | Preise, Titel, Texte bestehender Produkte automatisch ändern |
+| *mit `write_inventory` (Abschnitt 6):* Bestandsverfolgung einschalten, Demo-Bestand auf 0 setzen | Bestände anderer als Demo-Produkte setzen |
+| *mit `write_products` (Abschnitt 6):* eigene Produktbilder ergänzen, fehlende Produkte als **Entwurf** anlegen | Werbung, Apps oder Einstellungen ändern |
 
-**Berechtigungen:** `read_products` (Pflicht) und optional `read_inventory`. Hat die App irgendein
-`write_…`-Recht oder ein anderes Recht, verweigert die Kontrollzentrale die Verbindung. Zusätzlich lehnt der Code jede GraphQL-Mutation ab, bevor sie gesendet wird.
+**Berechtigungen:** `read_products` (Pflicht), dazu `read_inventory`, `write_products`, `write_inventory`.
+Jedes andere Recht – insbesondere `write_orders`, `write_publications`, `write_customers` – lässt die
+Kontrollzentrale die Verbindung ablehnen. Das Dashboard sendet nie Mutationen; geschrieben wird nur
+über eine feste Positivliste (`src/lib/shopify/write-operations.ts`).
 
 ## Voraussetzung
 
@@ -158,6 +162,52 @@ Kontrollzentrale die Verbindung bewusst ablehnen.
 Der **Lieferantenbestand** (Lager der Dropshipping-Partner) ist davon unabhängig, wird nicht mit dem
 Shopify-Bestand vermischt und ist noch nicht angebunden – die Lieferanten-Adapter entstehen separat.
 
+## 6. Automatische Korrekturen (write_products + write_inventory, freigegeben am 31.10.2026)
+
+Damit behebt die Kontrollzentrale Abweichungen selbst – aber nur aus einer festen Positivliste:
+
+| Operation | Recht | Wann |
+| --- | --- | --- |
+| Bestandsverfolgung einschalten | `write_inventory` | Variante verwaltet, Verfolgung in Shopify aus |
+| Demo-Bestand auf 0 setzen | `write_inventory` | Demo-Variante mit Bestand ≠ 0 an einem Standort |
+| Produktbild ergänzen | `write_products` | Produkt hat noch **gar kein** Medium; nur eigene Illustrationen aus `storefront/data/images/`, als Symbolbild gekennzeichnet |
+| Produkt als **Entwurf** anlegen | `write_products` | Produkt fehlt in Shopify ganz; alle Produkt-Guards (DRAFT, DENY, verfolgt …) müssen bestehen |
+
+Alles andere (Preise, Titel, Texte, Status, Varianten …) wird nur gemeldet, nie automatisch geändert.
+Auf unvollständiger Datenbasis wird nichts geschrieben.
+
+### 6.1 Rechte freigeben (einmalig)
+
+1. Dev Dashboard (<https://dev.shopify.com/dashboard/241630859/apps>) → **AI Commerce Kontrollzentrale**
+   → **Versions** → **Create a version**.
+2. **Scopes** – genau so, ohne Leerzeichen:
+   ```
+   read_products,read_inventory,write_products,write_inventory
+   ```
+3. **Release**. Die neue Version muss als **Active** erscheinen.
+4. Im Store bestätigen. Erfahrungsgemäß bietet Shopify keine Aktualisierung an – dann wie in 5.2:
+   im Store-Admin unter Einstellungen → Apps die App **deinstallieren** und im Dev Dashboard über
+   **Installs → Install app → yakru** neu installieren. Die Rechteabfrage darf nur Produkte und
+   Inventar (ansehen und bearbeiten) zeigen.
+5. Kontrolle im Store-Admin: App-Seite → „Activity and permissions“ zeigt **Products** und **Inventory**
+   jeweils mit ✓ bei *View* **und** *Edit*.
+
+> **Gut zu wissen:** Shopify meldet danach nur noch `write_products,write_inventory` – die Leserechte
+> sind darin eingeschlossen. Die Kontrollzentrale ergänzt sie automatisch und zeigt alle vier an.
+> Reihenfolge beachten: **erst** neue Version releasen (in der Versionsliste muss sie *Active* sein),
+> **dann** neu installieren – sonst bleiben die alten Rechte.
+
+### 6.2 Ausführen
+
+```bash
+npm run shopify:sync               # Testlauf: liest, zeigt geplante Änderungen, schreibt nichts
+npm run shopify:sync -- --apply    # führt aus und prüft danach live nach
+```
+
+Der Befehl liest `.env.local` selbst und gibt nur Handles, SKUs und bereinigte Meldungen aus.
+Bilder verarbeitet Shopify einige Sekunden bis Minuten im Hintergrund; ein zweiter Lauf erkennt
+„wird verarbeitet“ und lädt nichts doppelt hoch. Danach `http://localhost:3000/shopify` neu laden.
+
 ## Sicherheit im Überblick
 
 - **Nur serverseitig:** Token-Abruf und API-Aufrufe laufen ausschließlich im Next.js-Server
@@ -174,16 +224,19 @@ Shopify-Bestand vermischt und ist noch nicht angebunden – die Lieferanten-Adap
 - **Geheimnisse:** nur in `.env.local`; Fehlermeldungen werden vor der Anzeige bereinigt; keine Protokollierung.
 - **Token:** 24 Stunden gültig, nur im Arbeitsspeicher des Servers, 60 Sekunden vor Ablauf erneuert.
 - **API-Version** fest auf `2026-10` (erreichbar bis 16.10.2027) – rechtzeitig anheben.
-- **Tests:** `src/lib/shopify/server/connector.test.ts` und `src/lib/guards/safety.test.ts` prüfen u. a.:
-  keine Mutationen, keine Schreibrechte, Secret nie in URL oder Fehlertext, Netzwerk/Umgebungsvariablen
-  nur in den drei vorgesehenen Dateien, kein Shopify-Servercode in Browser-Komponenten.
+- **Schreiben nur per Befehl:** `npm run shopify:sync -- --apply` – das Dashboard importiert den
+  Schreib-Client nie (Sicherheitstest). Schreib-Dokumente existieren nur in `src/lib/shopify/graphql.ts`.
+- **Tests:** `connector.test.ts`, `write-operations.test.ts`, `repair.test.ts` und
+  `src/lib/guards/safety.test.ts` prüfen u. a.: Lese-Client sendet nie Mutationen, nur freigegebene
+  Rechte, Schreib-Client nur mit Positivliste und Schalter, Secret nie in URL oder Fehlertext,
+  Netzwerk/Umgebungsvariablen nur in den vorgesehenen Dateien, kein Shopify-Servercode im Browser.
 
-## Spätere Berechtigungen (erst nach Freigabe)
+## Berechtigungen im Überblick
 
 | Recht | Wofür | Phase |
 | --- | --- | --- |
 | `read_inventory` | Bestand je Standort und „Kosten pro Artikel“ anzeigen | **freigegeben** (Schritt 5) |
-| `write_products` | Store Manager Agent legt Produkt-**Entwürfe** an | nach Freigabe + Code-Review |
+| `write_products`, `write_inventory` | Positivliste aus Abschnitt 6 (Entwürfe, Bilder, Bestandsverfolgung) | **freigegeben** (Schritt 6) |
 | `read_orders` | Bestellungen für die Einkaufsprüfung lesen | später, mit Webhooks |
 
 Nie vorgesehen: `write_publications` (Veröffentlichen), `write_orders`, `write_draft_orders`, Zahlungsrechte.

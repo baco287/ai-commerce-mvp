@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { INVENTORY_ITEMS_QUERY, SHOPIFY_ADMIN_API_VERSION } from "../graphql";
-import { assertReadOnlyDocument, createReadOnlyAdminClient } from "./admin-client";
+import { INVENTORY_ITEMS_QUERY, SHOPIFY_ADMIN_API_VERSION, TRACK_INVENTORY_MUTATION } from "../graphql";
+import { ShopifyGuardError } from "../guards";
+import { assertReadOnlyDocument, createGuardedWriteClient, createReadOnlyAdminClient } from "./admin-client";
 import { clearTokenCache, getAccessToken, type FetchLike } from "./auth";
 import { isLocalDevelopment, readShopifyConfig, type ShopifyCredentials } from "./config";
 import { readAllProducts, readInventory } from "./read-products";
@@ -126,21 +127,20 @@ describe("Read-only-Admin-Client", () => {
     expect(() => assertReadOnlyDocument("subscription { a }")).toThrow();
   });
 
-  it("bricht ab, wenn die App Schreibrechte hat", async () => {
-    const { fetchImpl } = fakeShopify({ scope: "read_products,write_products" });
-    await expect(createReadOnlyAdminClient(credentials, fetchImpl)).rejects.toThrow(/Schreibrechte/);
-  });
-
-  it("akzeptiert zusätzlich read_inventory, aber keine anderen Rechte", async () => {
-    await expect(createReadOnlyAdminClient(credentials, fakeShopify({ scope: "read_products,read_inventory" }).fetchImpl)).resolves.toBeDefined();
+  it("akzeptiert genau die freigegebenen Rechte (read/write products, read/write inventory)", async () => {
+    for (const scope of ["read_products", "read_products,read_inventory", "read_products,read_inventory,write_products,write_inventory"]) {
+      clearTokenCache();
+      await expect(createReadOnlyAdminClient(credentials, fakeShopify({ scope }).fetchImpl), scope).resolves.toBeDefined();
+    }
     clearTokenCache();
     await expect(createReadOnlyAdminClient(credentials, fakeShopify({ scope: "read_products,read_orders" }).fetchImpl)).rejects.toThrow(/nicht vorgesehene Rechte/);
   });
 
-  it("lehnt jede Schreibberechtigung ab, auch für Bestand und Standorte", async () => {
-    for (const scope of ["read_products,read_inventory,write_inventory", "read_products,write_locations", "read_products,read_inventory,write_products"]) {
+  it("lehnt jedes nicht freigegebene Schreibrecht ab (Bestellungen, Veröffentlichen, Standorte …)", async () => {
+    for (const extra of ["write_orders", "write_publications", "write_locations", "write_draft_orders", "write_customers", "unauthenticated_write_checkouts"]) {
       clearTokenCache();
-      await expect(createReadOnlyAdminClient(credentials, fakeShopify({ scope }).fetchImpl), scope).rejects.toThrow(/Schreibrechte/);
+      const scope = `read_products,read_inventory,write_products,write_inventory,${extra}`;
+      await expect(createReadOnlyAdminClient(credentials, fakeShopify({ scope }).fetchImpl), scope).rejects.toThrow(/nicht freigegebene Schreibrechte/);
     }
   });
 
@@ -191,6 +191,7 @@ describe("Produkte und Bestand lesen", () => {
     productType: "",
     tags: [],
     featuredMedia: null,
+    media: { nodes: [] },
     variants: { pageInfo: { hasNextPage: moreVariants }, nodes: variantNumbers.map(variant) },
   });
   const ITEMS: Record<string, unknown> = {
@@ -299,5 +300,73 @@ describe("Produkte und Bestand lesen", () => {
     expect(error.message).toContain("read_inventory");
     expect(error.message.match(/Access denied/g)).toHaveLength(1);
     for (const secret of [credentials.clientSecret, credentials.clientId, "shpat_faketoken123456"]) expect(error.message).not.toContain(secret);
+  });
+});
+
+describe("Abgesicherter Schreib-Client", () => {
+  const ITEM = "gid://shopify/InventoryItem/123";
+  const WRITE_SCOPES = "read_products,read_inventory,write_products,write_inventory";
+  const graphqlCalls = (calls: Call[]) => calls.filter((c) => c.url.endsWith("/graphql.json"));
+
+  it("verbindet sich gar nicht, wenn der Schreibzugriff ausgeschaltet ist", async () => {
+    const { calls, fetchImpl } = fakeShopify({ scope: WRITE_SCOPES });
+    await expect(createGuardedWriteClient(credentials, { fetchImpl, writeEnabled: false })).rejects.toThrow(/deaktiviert/);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("sendet ausschließlich das feste Dokument der Operation", async () => {
+    const { calls, fetchImpl } = fakeShopify({
+      scope: WRITE_SCOPES,
+      graphql: { data: { inventoryItemUpdate: { inventoryItem: { id: ITEM, tracked: true }, userErrors: [] } } },
+    });
+    const writer = await createGuardedWriteClient(credentials, { fetchImpl, writeEnabled: true });
+    await writer.run({ kind: "track-inventory", inventoryItemId: ITEM });
+    const [call] = graphqlCalls(calls);
+    expect(JSON.parse(call.body)).toEqual({ query: TRACK_INVENTORY_MUTATION, variables: { id: ITEM } });
+  });
+
+  it("prüft die Guards vor dem Senden", async () => {
+    const { calls, fetchImpl } = fakeShopify({ scope: WRITE_SCOPES });
+    const writer = await createGuardedWriteClient(credentials, { fetchImpl, writeEnabled: true });
+    await expect(
+      writer.run({ kind: "add-image", productId: "gid://shopify/Product/1", source: "https://example.com/x.png", alt: "Symbolbild" }),
+    ).rejects.toThrow(ShopifyGuardError);
+    expect(graphqlCalls(calls)).toHaveLength(0);
+  });
+
+  it("verlangt das passende Schreibrecht je Operation", async () => {
+    const { calls, fetchImpl } = fakeShopify({ scope: "read_products,read_inventory,write_products" });
+    const writer = await createGuardedWriteClient(credentials, { fetchImpl, writeEnabled: true });
+    await expect(writer.run({ kind: "track-inventory", inventoryItemId: ITEM })).rejects.toThrow(/write_inventory/);
+    expect(graphqlCalls(calls)).toHaveLength(0);
+  });
+
+  it("meldet von Shopify abgelehnte Änderungen als Fehler", async () => {
+    const { fetchImpl } = fakeShopify({
+      scope: WRITE_SCOPES,
+      graphql: { data: { inventoryItemUpdate: { inventoryItem: null, userErrors: [{ message: "Inventory item does not exist" }] } } },
+    });
+    const writer = await createGuardedWriteClient(credentials, { fetchImpl, writeEnabled: true });
+    await expect(writer.run({ kind: "track-inventory", inventoryItemId: ITEM })).rejects.toThrow(/abgelehnt: Inventory item does not exist/);
+  });
+
+  it("lässt den Lese-Client auch mit Schreibrechten nie Mutationen senden", async () => {
+    const { calls, fetchImpl } = fakeShopify({ scope: WRITE_SCOPES });
+    const reader = await createReadOnlyAdminClient(credentials, fetchImpl);
+    await expect(reader.query(TRACK_INVENTORY_MUTATION, { id: ITEM })).rejects.toThrow(/gesperrt/);
+    expect(graphqlCalls(calls)).toHaveLength(0);
+  });
+});
+
+describe("Eingeschlossene Leserechte", () => {
+  it("wertet write_products/write_inventory auch als Leserechte (so meldet Shopify es live)", async () => {
+    const reader = await createReadOnlyAdminClient(credentials, fakeShopify({ scope: "write_products,write_inventory" }).fetchImpl);
+    expect(reader.scopes.sort()).toEqual(["read_inventory", "read_products", "write_inventory", "write_products"]);
+  });
+
+  it("macht aus einem verbotenen Schreibrecht kein erlaubtes", async () => {
+    await expect(createReadOnlyAdminClient(credentials, fakeShopify({ scope: "write_products,write_orders" }).fetchImpl)).rejects.toThrow(
+      /nicht freigegebene Schreibrechte \(write_orders\)/,
+    );
   });
 });

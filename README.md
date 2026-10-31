@@ -50,7 +50,7 @@ Dashboard: <http://localhost:3000>
 | `/lieferanten` | Mehrere Angebote je Produkt, Vergleich von Einkauf, Versand, Import, Lieferzeit; Markierung des günstigsten **geeigneten** Lieferanten |
 | `/agenten` | Die sechs KI-Agenten mit Befugnissen, Freigabepflichten und Status (Pausieren nur lokal) |
 | `/freigaben` | Freigabe-Warteschlange, Sicherheitsschalter, Grenzwerte, Startbudget 500 € |
-| `/shopify` | Shopify-Synchronisierung: **echte** Produktdaten aus dem Dev Store (nur lesend) im Abgleich mit der Kontrollzentrale; Shopify-Bestand je Standort (mit `read_inventory`), getrennt vom Lieferantenbestand; letzte erfolgreiche Synchronisierung; Dry-Run der automatischen Produktanlage |
+| `/shopify` | Shopify-Synchronisierung: **echte** Produktdaten aus dem Dev Store (die Seite liest nur) im Abgleich mit der Kontrollzentrale; Shopify-Bestand je Standort (mit `read_inventory`), getrennt vom Lieferantenbestand; letzte erfolgreiche Synchronisierung; Dry-Run der automatischen Produktanlage |
 
 ## Tech-Stack
 
@@ -66,9 +66,12 @@ Dashboard: <http://localhost:3000>
 - Automatischer Lieferanteneinkauf ist erst zulässig, wenn die Kundenzahlung erfasst **und** die
   Finanzierung gesichert ist (Auszahlung erhalten, ausreichendes Zahlungsziel oder Finanzierungsrahmen).
   Logik und Tests: `src/lib/guards/purchase.ts`.
+- Shopify-Schreibzugriff ist **eng freigegeben** (seit 31.10.2026): nur Bestandsverfolgung, Demo-Bestand 0,
+  eigene Produktbilder und fehlende Produkte als Entwurf – per `npm run shopify:sync` (Testlauf) bzw.
+  `npm run shopify:sync -- --apply`, nie aus dem Dashboard. Veröffentlichen bleibt manuell.
 - Zugangsdaten gehören in `.env.local` (von Git ignoriert). Vorlage: `.env.example`.
 
 Welche Funktionen serverseitig laufen und welche nur simuliert sind, warum die Einkaufssperre nicht
 umgangen werden kann und die nächsten Schritte: [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md).
-Shopify: [Read-only-API einrichten](docs/SHOPIFY-API-EINRICHTUNG.md) · [Datenfelder](docs/SHOPIFY-INTEGRATION.md) ·
+Shopify: [API einrichten und Korrekturen](docs/SHOPIFY-API-EINRICHTUNG.md) · [Datenfelder](docs/SHOPIFY-INTEGRATION.md) ·
 [Automatisierungs-Fahrplan](docs/SHOPIFY-AUTOMATISIERUNG.md) · [CSV-Import](docs/SHOPIFY-PRODUKTIMPORT.md).
