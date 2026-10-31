@@ -123,6 +123,27 @@ describe("Vergleich und Empfehlung", () => {
     for (const r of [cheapest, fastest, best]) expect(r?.reasons).toContain("Demo-Daten – keine echte Einkaufsgrundlage.");
   });
 
+  it("liefert strukturierte Felder für die Oberfläche – und nie eine Freigabe", () => {
+    const { cheapest, fastest, best } = result.recommendations;
+    expect(cheapest).toMatchObject({
+      quoteId: "cheap",
+      approval: "none",
+      demo: true,
+      requiresPrefinancing: true,
+      financingStatus: "prepayment_required",
+      openPoints: [],
+      perUnit: 11,
+      deliveryDays: { min: 8, max: 12 },
+      score: 60.3,
+    });
+    expect(fastest).toMatchObject({ quoteId: "fast", approval: "none", requiresPrefinancing: false, perUnit: 18, deliveryDays: { min: 1, max: 2 } });
+    expect(best).toMatchObject({ quoteId: "balanced", approval: "none", requiresPrefinancing: false, financingStatus: "payment_terms_confirmed", score: 88.7 });
+
+    // Offene Punkte kommen strukturiert mit, nicht nur als Text
+    const open = compareQuotes(query, [quote({ id: "open", reliability: { sampleTested: missing() } })]);
+    expect(open.recommendations.best?.openPoints).toEqual([{ code: "sample_not_tested", message: "Geprüftes Muster fehlt." }]);
+  });
+
   it("ist deterministisch und unabhängig von der Reihenfolge der Angebote", () => {
     const reversed = compareQuotes(query, [unclear, balanced, fast, cheap]);
     expect(reversed).toEqual(result);

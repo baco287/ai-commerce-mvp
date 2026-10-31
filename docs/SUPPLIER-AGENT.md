@@ -31,7 +31,7 @@ veröffentlicht nichts in Shopify. Einkäufe laufen später ausschließlich übe
 | `src/lib/suppliers/scout.ts` | Ablauf über mehrere Adapter (`scoutSuppliers`) |
 | `src/lib/suppliers/purchase-bridge.ts` | Konservative Übergabe des Zahlungsziels an die Einkaufssperre |
 | `src/lib/suppliers/quote-builder.ts` | Baukasten für Demo-Daten und Tests |
-| `src/lib/suppliers/demo/demo-suppliers.ts` | Fiktive Demo-Lieferanten in zwei Demo-Adaptern |
+| `src/lib/suppliers/demo/demo-suppliers.ts` | Fiktive Demo-Lieferanten für alle 5 Produkte in zwei Demo-Adaptern (Kernzahlen aus `src/lib/demo/suppliers.ts`) |
 | `src/lib/suppliers/index.ts` | Öffentliche Schnittstelle |
 | `src/lib/suppliers/*.test.ts` | Automatisierte Tests |
 
@@ -54,9 +54,28 @@ ProductQuery ──► scoutSuppliers(query, adapters)
 import { scoutSuppliers, DEMO_ADAPTERS, DEMO_QUERIES } from "@/lib/suppliers";
 
 const report = await scoutSuppliers(DEMO_QUERIES["p-led"], DEMO_ADAPTERS);
-report.recommendations.best?.supplierName; // "EuroLight Fulfillment (Demo)"
-report.recommendations.best?.reasons;      // Begründung, ein Satz je Eintrag
+const best = report.recommendations.best;
+best?.supplierName;          // "Lumio Großhandel (Demo)"
+best?.approval;              // immer "none" – eine Empfehlung ist nie eine Einkaufsfreigabe
+best?.requiresPrefinancing;  // false (bestätigtes Zahlungsziel 14 Tage)
+best?.openPoints;            // offene Punkte als { code, message }[]
+best?.reasons;               // Begründung, ein Satz je Eintrag
 ```
+
+### Felder einer Empfehlung (`Recommendation`)
+
+| Feld | Bedeutung |
+| --- | --- |
+| `kind` | `cheapest`, `fastest` oder `best` |
+| `quoteId`, `supplierName` | Welches Angebot empfohlen wird |
+| `approval` | Immer `"none"`. Eine Empfehlung gibt nichts frei; Einkäufe laufen nur über die Einkaufssperre. |
+| `demo` | Angebot stammt aus fiktiven Demo-Daten |
+| `requiresPrefinancing`, `financingStatus` | Ergebnis der Finanzierungsprüfung (siehe unten) |
+| `openPoints` | Offene Punkte (fehlende oder unbestätigte Angaben) als `{ code, message }` |
+| `perUnit`, `deliveryDays`, `score` | Gesamtkosten je Stück, Lieferzeit, Gesamtbewertung 0–100 |
+| `reasons` | Begründung als Sätze für Menschen |
+
+Die Oberfläche soll Abzeichen aus den strukturierten Feldern bauen, nicht aus den Begründungstexten.
 
 ## Fehlende und unbestätigte Angaben
 
@@ -159,21 +178,31 @@ Gleiche Eingabe ergibt immer dieselbe Empfehlung – unabhängig von der Reihenf
 
 | Lieferant | Gesamtkosten | Lieferzeit | Zahlung | Punkte | Ergebnis |
 | --- | --- | --- | --- | --- | --- |
-| EuroLight Fulfillment (Demo), PL | 11,60 € | 3–5 Tage | 14 Tage Ziel | 88,9 | **insgesamt bester** |
-| Lumio Großhandel (Demo), DE | 17,80 € | 1–2 Tage | 30 Tage Ziel | 83,1 | **schnellster** |
-| Brightline Demo Co., CN | 11,20 € | 8–12 Tage | Vorkasse | 58,7 | **günstigster** |
+| Lumio Großhandel (Demo), DE | 13,80 € | 2–3 Tage | 14 Tage Ziel | 89,7 | **insgesamt bester** und **schnellster** |
+| EuroLight Fulfillment (Demo), PL | 11,60 € | 4–7 Tage | Vorkasse | 74,8 | **günstigster** (Vorfinanzierung nötig) |
+| Brightline Demo Co., CN | 11,20 € | 9–16 Tage | – | – | ausgeschlossen: Lieferzeit über 12 Tage |
 | Shinelight Wholesale (Demo) | 8,20 € | – | – | – | ausgeschlossen: nur ähnliche Variante |
 | Voltmarkt Restposten (Demo) | 10,40 € | – | – | – | ausgeschlossen: CE fehlt, Sicherheitshinweise unbestätigt |
-| Stripe & Co. Lager (Demo) | – | – | – | – | ausgeschlossen: kein Bestand |
 | Bulkware Demo Trading | – | – | – | – | ausgeschlossen: Mindestabnahme 100 (Vorratskauf) |
 
 Beispielbegründung für „insgesamt bester":
 
-> Höchste Gesamtbewertung: 88,9 von 100 (Kosten 96,6, Tempo 70, Zuverlässigkeit 91,1, Finanzierung 100).
+> Höchste Gesamtbewertung: 89,7 von 100 (Kosten 84,1, Tempo 90, Zuverlässigkeit 94,4, Finanzierung 100).
 > Gewichtung: Kosten 40 %, Tempo 25 %, Zuverlässigkeit 25 %, Finanzierung 10 %.
-> 5,8 Punkte vor Lumio Großhandel (Demo) (83,1).
-> 0,40 € teurer als das günstigste Angebot (Brightline Demo Co.), dafür insgesamt besser.
+> 14,9 Punkte vor EuroLight Fulfillment (Demo) (74,8).
+> 2,20 € teurer als das günstigste Angebot (EuroLight Fulfillment (Demo)), dafür insgesamt besser.
+> Zugleich das schnellste geeignete Angebot.
 > Bestätigtes Zahlungsziel 14 Tage – keine Vorfinanzierung.
+
+### Demo-Daten
+
+`src/lib/suppliers/demo/demo-suppliers.ts` deckt alle fünf Dashboard-Produkte ab. Preis, Versand, Import,
+Lieferzeit, Bewertung, Bestand und Zahlungsbedingungen werden **1:1 aus `src/lib/demo/suppliers.ts`** übernommen –
+Dashboard und Scout zeigen also dieselben Zahlen (per Test abgesichert). Ergänzt werden nur Angaben, die das alte
+Modell nicht kennt: Produktidentität (fiktive GTINs mit Präfix 200), Produktsicherheit, Dropshipping,
+Pünktlichkeit, Reklamationsquote, Musterprüfung und Gewerbeprüfung. Ob CE Pflicht ist, kommt aus den
+Compliance-Hinweisen des Produkts. Fünf zusätzliche Angebote gibt es nur im Scout; sie zeigen Ausschlussgründe
+(Identität, CE, Vorratskauf, Behördenwarnung, kein Bestand).
 
 ## Schnittstelle für echte Lieferanten
 
@@ -226,10 +255,13 @@ Regeln für echte Adapter:
 Für Quellen ohne GTIN-Suche (z. B. Marktplätze) kann `ProductQuery` zusätzlich `keywords` und `category`
 enthalten. Ein Treffer über Suchbegriffe ersetzt nie die Identitätsprüfung.
 
-## Integration in das Dashboard (Vorschlag, noch nicht umgesetzt)
+## Integration in das Dashboard (in Arbeit)
 
 Die bestehende Seite `/lieferanten` nutzt `evaluateOffers` aus `src/lib/calc/suppliers.ts` mit dem älteren,
-flachen Typ `SupplierOffer`. Vorschlag in drei Schritten, jeweils nach Absprache:
+flachen Typ `SupplierOffer`.
+
+Erledigt: strukturierte Empfehlungsfelder (`approval`, `demo`, `requiresPrefinancing`, `openPoints` …) und
+einheitliche Demo-Daten für alle fünf Produkte. Offen, jeweils nach Absprache:
 
 1. **Daten bereitstellen:** In `src/lib/data.ts` eine Funktion `getSupplierScoutReports()` ergänzen, die für jedes
    Demo-Produkt `scoutSuppliers(DEMO_QUERIES[id], DEMO_ADAPTERS)` aufruft. Da `scoutSuppliers` asynchron ist,
