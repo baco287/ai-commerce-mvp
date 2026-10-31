@@ -165,12 +165,24 @@ export function checkEligibility(q: SupplierQuote, query: ProductQuery, rules: S
   if (q.reliability.rating.status === "missing") warn("rating_missing", "Keine Lieferantenbewertung vorhanden.");
   if (q.reliability.onTimeRate.status === "missing") warn("on_time_missing", "Pünktlichkeitsquote fehlt.");
   if (q.reliability.defectRate.status === "missing") warn("defect_missing", "Reklamationsquote fehlt.");
+  if (!isConfirmed(q.reliability.sampleTested, Boolean)) {
+    const sample = factValue(q.reliability.sampleTested) === false ? "noch nicht geprüft" : statusText(q.reliability.sampleTested);
+    warn("sample_not_tested", `Geprüftes Muster ${sample}.`);
+  }
 
   // --- Zahlung ---------------------------------------------------------------
   if (q.payment.terms.status === "missing") {
     warn("payment_terms_missing", "Zahlungsbedingungen unbekannt – Vorfinanzierung wird angenommen.");
   } else if (q.payment.terms.status === "unconfirmed") {
     warn("payment_terms_unconfirmed", "Zahlungsziel nur unbestätigt – bis zur Bestätigung gilt Vorfinanzierung.");
+  }
+  if (factValue(q.payment.terms)?.kind === "net_terms") {
+    const verification = factValue(q.payment.requiresBusinessVerification);
+    if (verification === undefined) {
+      warn("business_verification_unknown", "Unklar, ob das Zahlungsziel eine Gewerbe-/USt-Prüfung voraussetzt.");
+    } else if (verification) {
+      warn("payment_terms_pending_verification", "Zahlungsziel erst nach Gewerbe-/USt-Prüfung.");
+    }
   }
 
   return { eligible: exclusions.length === 0, exclusions, warnings };

@@ -29,6 +29,7 @@ veröffentlicht nichts in Shopify. Einkäufe laufen später ausschließlich übe
 | `src/lib/suppliers/scoring.ts` | Deterministische Punktbewertung |
 | `src/lib/suppliers/compare.ts` | Vergleich, drei Empfehlungen, Begründungstexte |
 | `src/lib/suppliers/scout.ts` | Ablauf über mehrere Adapter (`scoutSuppliers`) |
+| `src/lib/suppliers/purchase-bridge.ts` | Konservative Übergabe des Zahlungsziels an die Einkaufssperre |
 | `src/lib/suppliers/quote-builder.ts` | Baukasten für Demo-Daten und Tests |
 | `src/lib/suppliers/demo/demo-suppliers.ts` | Fiktive Demo-Lieferanten in zwei Demo-Adaptern |
 | `src/lib/suppliers/index.ts` | Öffentliche Schnittstelle |
@@ -90,7 +91,8 @@ Ein Angebot wird ausgeschlossen – und nie empfohlen –, wenn einer dieser Pun
 
 **Offene Punkte (Hinweise)** schließen nicht aus, stehen aber in der Begründung unter „Vor Freigabe klären":
 unbestätigte Preise/Bestände/Lieferzeiten, neutraler Versand oder Sendungsverfolgung ungeklärt,
-Bestellweg unbekannt, Mindestabnahme unbekannt, fehlende Zuverlässigkeitsdaten, unbestätigtes Zahlungsziel.
+Bestellweg unbekannt, Mindestabnahme unbekannt, fehlende Zuverlässigkeitsdaten, kein geprüftes Muster,
+unbestätigtes Zahlungsziel, unklar ob das Zahlungsziel eine Gewerbe-/USt-Prüfung voraussetzt.
 
 ## Finanzierung
 
@@ -99,11 +101,26 @@ Bestellweg unbekannt, Mindestabnahme unbekannt, fehlende Zuverlässigkeitsdaten,
 | `payment_terms_confirmed` | nein | Bestätigtes Zahlungsziel ≥ 7 Tage (Auszahlungsdauer) |
 | `payment_terms_too_short` | ja (teilweise) | Bestätigtes Zahlungsziel < 7 Tage |
 | `payment_terms_unconfirmed` | ja | Zahlungsziel nur behauptet – gilt bis zur Bestätigung als Vorkasse |
+| `payment_terms_pending_verification` | ja | Zahlungsziel gilt erst nach Gewerbe-/USt-Prüfung (auch wenn das nur behauptet ist) |
 | `prepayment_required` | ja | Vorkasse |
 | `unknown` | ja | Keine Angabe |
 
 Sind alle geeigneten Angebote vorfinanzierungspflichtig, steht im Bericht der Hinweis, vor einem Einkauf
 ein Zahlungsziel zu verhandeln.
+
+### Übergabe an die Einkaufssperre
+
+Die Einkaufssperre (`evaluateAutoPurchase`) kennt nur die festen Stufen `vorkasse`, `netto14` und `netto30`.
+`toPurchaseGuardTerms(assessFinancing(quote))` rechnet konservativ um:
+
+| Scout | An die Einkaufssperre |
+| --- | --- |
+| Bestätigt, 30 Tage oder mehr | `netto30` |
+| Bestätigt, 14–29 Tage | `netto14` |
+| Bestätigt, unter 14 Tage | `vorkasse` (abgerundet) |
+| Vorkasse, unbestätigt, fehlend, Gewerbeprüfung ausstehend | `vorkasse` |
+
+Damit kann ein nur behauptetes Zahlungsziel die Finanzierungsprüfung der Einkaufssperre nie erfüllen.
 
 ## Bewertung
 
@@ -194,8 +211,12 @@ Regeln für echte Adapter:
 | Import | Zoll, Einfuhrumsatzsteuer, Abwicklungsgebühren (bei Versand von außerhalb der EU), Incoterm (idealerweise DDP) | Gesamtkosten | Ausschluss |
 | Bestand | Verfügbare Menge beim Lieferanten, Zeitpunkt | Lieferfähigkeit | Ausschluss |
 | Dropshipping | Direktversand an Endkunden, neutraler Versand, Bestellweg (API/Portal/E-Mail), Retourenabwicklung | Geschäftsmodell | Ausschluss / Hinweis |
-| Zahlung | Zahlungsart, Zahlungsziel in Tagen (schriftlich bestätigt), Kreditrahmen, Voraussetzungen (Gewerbe-/USt-Prüfung) | Vorfinanzierung vermeiden | Gilt als Vorfinanzierung |
-| Zuverlässigkeit | Bewertung, Pünktlichkeitsquote, Reklamationsquote (idealerweise aus eigenen Bestellungen) | Zuverlässigkeitswert | 0 Punkte, Hinweis |
+| Zahlung | Zahlungsarten (`methods`), Zahlungsziel in Tagen (schriftlich bestätigt), Kreditrahmen, Voraussetzungen (Gewerbe-/USt-Prüfung) | Vorfinanzierung vermeiden | Gilt als Vorfinanzierung |
+| Zuverlässigkeit | Bewertung, Pünktlichkeitsquote, Reklamationsquote (idealerweise aus eigenen Bestellungen), geprüftes Muster | Zuverlässigkeitswert | 0 Punkte, Hinweis |
+| Unterlagen | Konformitätserklärung, Prüfberichte (`safety.documents`) | Compliance-Prüfung vor Freigabe | Information |
+
+Für Quellen ohne GTIN-Suche (z. B. Marktplätze) kann `ProductQuery` zusätzlich `keywords` und `category`
+enthalten. Ein Treffer über Suchbegriffe ersetzt nie die Identitätsprüfung.
 
 ## Integration in das Dashboard (Vorschlag, noch nicht umgesetzt)
 

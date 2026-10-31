@@ -38,6 +38,9 @@ export interface ProductQuery {
   title: string;
   /** EAN/GTIN – sicherste Zuordnung über Lieferanten hinweg */
   gtin?: string;
+  /** Suchbegriffe für Quellen ohne GTIN-Suche (z. B. Marktplätze). Ersetzt nie die Identitätsprüfung. */
+  keywords?: string;
+  category?: string;
   /** Stück je Kundenbestellung (Standard 1) */
   quantity: number;
   destinationCountry: "DE";
@@ -67,6 +70,8 @@ export interface ProductSafety {
   safetyInformationDe: Fact<boolean>;
   /** Bekannte Probleme, z. B. Rückruf, Behördenwarnung. Jeder Eintrag schließt das Angebot aus. */
   openIssues: string[];
+  /** Vorliegende Unterlagen, z. B. Konformitätserklärung, Prüfbericht – für die Compliance-Prüfung */
+  documents: string[];
 }
 
 /** Alle Beträge netto in EUR je Stück. */
@@ -106,12 +111,18 @@ export interface DropshippingSupport {
  * Zahlungsbedingungen beim Lieferanten.
  * prepayment = Zahlung vor Versand (Vorkasse), net_terms = Rechnung mit Zahlungsziel.
  */
-export type PaymentTerms = { kind: "prepayment" } | { kind: "net_terms"; days: number };
+export type SupplierPaymentTerms = { kind: "prepayment" } | { kind: "net_terms"; days: number };
+
+export type PaymentMethod = "prepayment" | "invoice" | "credit_card" | "paypal" | "direct_debit";
 
 export interface PaymentConditions {
-  terms: Fact<PaymentTerms>;
+  terms: Fact<SupplierPaymentTerms>;
+  /** Angebotene Zahlungsarten */
+  methods: Fact<PaymentMethod[]>;
   /** Kreditrahmen beim Lieferanten in EUR, falls eingeräumt */
   creditLimit: Fact<number>;
+  /** Zahlungsziel erst nach Gewerbe-/USt-Prüfung – bis dahin gilt es nicht */
+  requiresBusinessVerification: Fact<boolean>;
 }
 
 export interface Reliability {
@@ -121,6 +132,8 @@ export interface Reliability {
   onTimeRate: Fact<number>;
   /** Anteil reklamierter/defekter Sendungen 0–1 */
   defectRate: Fact<number>;
+  /** Muster bestellt und geprüft (Qualität, Kennzeichnung, Verpackung) */
+  sampleTested: Fact<boolean>;
 }
 
 /** Ein normalisiertes Lieferantenangebot für genau ein Produkt. */

@@ -6,7 +6,7 @@
 // ausgewogen mit Zahlungsziel – und Angebote, die ausgeschlossen werden müssen.
 
 import type { SupplierAdapter } from "../adapter";
-import { missing, unconfirmed, type ProductQuery, type SupplierQuote } from "../model";
+import { missing, unconfirmed, type PaymentConditions, type ProductQuery, type SupplierQuote } from "../model";
 import { buildQuote, ok, type QuoteOverrides } from "../quote-builder";
 
 /** Suchanfragen für die Demo-Produkte aus src/lib/demo/products.ts */
@@ -30,6 +30,12 @@ export const DEMO_QUERIES = {
 } satisfies Record<string, ProductQuery>;
 
 const said = <T>(value: T) => unconfirmed(value, "Selbstauskunft Lieferant (Demo)");
+
+const PREPAYMENT: Partial<PaymentConditions> = {
+  terms: ok({ kind: "prepayment" }),
+  methods: ok(["prepayment", "paypal"]),
+  creditLimit: missing(),
+};
 
 function forProduct(productId: keyof typeof DEMO_QUERIES) {
   const q = DEMO_QUERIES[productId];
@@ -64,10 +70,10 @@ const EU_WHOLESALE: SupplierQuote[] = [
     id: "demo-eu:voltmarkt:p-led",
     supplierId: "voltmarkt",
     supplierName: "Voltmarkt Restposten (Demo)",
-    safety: { ceMarking: missing(), safetyInformationDe: said(true) },
+    safety: { ceMarking: missing(), safetyInformationDe: said(true), documents: [] },
     pricing: { unitPrice: ok(7.5), shippingCost: ok(2.9), importCost: ok(0) },
     fulfillment: { shipsFrom: ok("DE"), deliveryDays: ok({ min: 2, max: 4 }), stock: ok(140) },
-    payment: { terms: ok({ kind: "prepayment" }), creditLimit: missing() },
+    payment: PREPAYMENT,
   }),
   // Ausschluss: derzeit kein Bestand
   led({
@@ -84,7 +90,7 @@ const EU_WHOLESALE: SupplierQuote[] = [
     pricing: { unitPrice: ok(11.2), shippingCost: ok(3.9), importCost: ok(0) },
     fulfillment: { shipsFrom: ok("NL"), deliveryDays: ok({ min: 3, max: 6 }), stock: ok(420) },
     // Zahlungsziel nur behauptet → gilt bis zur Bestätigung als Vorfinanzierung
-    payment: { terms: said({ kind: "net_terms", days: 30 }), creditLimit: missing() },
+    payment: { terms: said({ kind: "net_terms", days: 30 }), creditLimit: missing(), requiresBusinessVerification: missing() },
   }),
   stand({
     id: "demo-eu:ergohandel:p-stand",
@@ -105,8 +111,8 @@ const ASIA_MARKETPLACE: SupplierQuote[] = [
     pricing: { unitPrice: ok(6.2), shippingCost: ok(3.9), importCost: said(1.1) },
     fulfillment: { shipsFrom: ok("CN"), deliveryDays: ok({ min: 8, max: 12 }), stock: ok(2400) },
     dropshipping: { blindShipping: said(true) },
-    payment: { terms: ok({ kind: "prepayment" }), creditLimit: missing() },
-    reliability: { rating: ok(4.5), onTimeRate: ok(0.86), defectRate: ok(0.03) },
+    payment: PREPAYMENT,
+    reliability: { rating: ok(4.5), onTimeRate: ok(0.86), defectRate: ok(0.03), sampleTested: missing() },
   }),
   // Ausschluss: nur ähnliche Variante, Identität nicht bestätigt
   led({
@@ -116,7 +122,7 @@ const ASIA_MARKETPLACE: SupplierQuote[] = [
     identity: { gtin: missing(), match: said("variant") },
     pricing: { unitPrice: ok(4.9), shippingCost: ok(2.5), importCost: said(0.8) },
     fulfillment: { shipsFrom: ok("CN"), deliveryDays: ok({ min: 9, max: 12 }), stock: ok(5000) },
-    payment: { terms: ok({ kind: "prepayment" }), creditLimit: missing() },
+    payment: PREPAYMENT,
   }),
   // Ausschluss: Mindestabnahme 100 Stück – das wäre ein Vorratskauf
   led({
@@ -125,7 +131,7 @@ const ASIA_MARKETPLACE: SupplierQuote[] = [
     supplierName: "Bulkware Demo Trading",
     pricing: { unitPrice: ok(3.8), shippingCost: ok(1.2), importCost: ok(0.6), minOrderQuantity: ok(100) },
     fulfillment: { shipsFrom: ok("CN"), deliveryDays: ok({ min: 10, max: 12 }), stock: ok(20000) },
-    payment: { terms: ok({ kind: "prepayment" }), creditLimit: missing() },
+    payment: PREPAYMENT,
   }),
   // Ausschluss: Lieferzeit zu lang
   stand({
@@ -134,7 +140,7 @@ const ASIA_MARKETPLACE: SupplierQuote[] = [
     supplierName: "MetalWorks Demo Ltd.",
     pricing: { unitPrice: ok(7.8), shippingCost: ok(5.4), importCost: ok(1.6) },
     fulfillment: { shipsFrom: ok("CN"), deliveryDays: ok({ min: 10, max: 18 }), stock: ok(1500) },
-    payment: { terms: ok({ kind: "prepayment" }), creditLimit: missing() },
+    payment: PREPAYMENT,
   }),
 ];
 

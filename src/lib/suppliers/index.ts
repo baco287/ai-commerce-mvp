@@ -8,4 +8,5 @@ export * from "./financing";
 export * from "./scoring";
 export * from "./compare";
 export * from "./scout";
+export * from "./purchase-bridge";
 export { DEMO_ADAPTERS, DEMO_QUERIES, createDemoAdapter } from "./demo/demo-suppliers";

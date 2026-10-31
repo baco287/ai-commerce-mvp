@@ -125,6 +125,15 @@ describe("Eignungsprüfung", () => {
     });
   });
 
+  it("vermerkt fehlende Musterprüfung und unklare Voraussetzungen für das Zahlungsziel", () => {
+    expect(warnings({ reliability: { sampleTested: missing() } })).toEqual(["sample_not_tested"]);
+    expect(warnings({ reliability: { sampleTested: ok(false) } })).toEqual(["sample_not_tested"]);
+    expect(warnings({ payment: { requiresBusinessVerification: missing() } })).toEqual(["business_verification_unknown"]);
+    expect(warnings({ payment: { requiresBusinessVerification: ok(true) } })).toEqual(["payment_terms_pending_verification"]);
+    // Bei Vorkasse spielt die Gewerbeprüfung keine Rolle
+    expect(warnings({ payment: { terms: ok({ kind: "prepayment" }), requiresBusinessVerification: missing() } })).toEqual([]);
+  });
+
   it("vermerkt unbestätigte Angaben ausdrücklich als Hinweis", () => {
     expect(
       warnings({
@@ -164,5 +173,16 @@ describe("Finanzierung", () => {
   it("behandelt unbestätigte oder fehlende Zahlungsziele konservativ", () => {
     expect(fin({ terms: said({ kind: "net_terms", days: 30 }) })).toMatchObject({ status: "payment_terms_unconfirmed", termDays: 30, requiresPrefinancing: true });
     expect(fin({ terms: missing() })).toMatchObject({ status: "unknown", termDays: null, requiresPrefinancing: true });
+  });
+
+  it("verlangt Vorfinanzierung, solange eine Gewerbe-/USt-Prüfung aussteht", () => {
+    expect(fin({ terms: ok({ kind: "net_terms", days: 30 }), requiresBusinessVerification: ok(true) })).toMatchObject({
+      status: "payment_terms_pending_verification",
+      termDays: 30,
+      requiresPrefinancing: true,
+    });
+    expect(fin({ terms: ok({ kind: "net_terms", days: 30 }), requiresBusinessVerification: said(true) })).toMatchObject({
+      status: "payment_terms_pending_verification",
+    });
   });
 });

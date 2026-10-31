@@ -26,12 +26,18 @@ export function buildQuote(o: QuoteOverrides): SupplierQuote {
     productId: "p-test",
     demo: true,
     identity: { supplierSku: `SKU-${o.id}`, title: "Testprodukt", gtin: ok("2000000000015"), mpn: ok("MPN-1"), brand: ok("Demo"), match: ok("exact") },
-    safety: { ceMarking: ok(true), euResponsiblePerson: ok("Demo Verantwortliche GmbH (fiktiv)"), safetyInformationDe: ok(true), openIssues: [] },
+    safety: {
+      ceMarking: ok(true),
+      euResponsiblePerson: ok("Demo Verantwortliche GmbH (fiktiv)"),
+      safetyInformationDe: ok(true),
+      openIssues: [],
+      documents: ["Konformitätserklärung (Demo)"],
+    },
     pricing: { unitPrice: ok(10), shippingCost: ok(3), importCost: ok(0), minOrderQuantity: ok(1) },
     fulfillment: { shipsFrom: ok("DE"), deliversToDestination: ok(true), deliveryDays: ok({ min: 2, max: 4 }), stock: ok(500), tracking: ok(true) },
     dropshipping: { supported: ok(true), blindShipping: ok(true), orderChannel: ok("portal"), returnsHandledBy: ok("supplier") },
-    payment: { terms: ok({ kind: "net_terms", days: 30 }), creditLimit: ok(500) },
-    reliability: { rating: ok(4.6), onTimeRate: ok(0.95), defectRate: ok(0.01) },
+    payment: { terms: ok({ kind: "net_terms", days: 30 }), methods: ok(["invoice"]), creditLimit: ok(500), requiresBusinessVerification: ok(false) },
+    reliability: { rating: ok(4.6), onTimeRate: ok(0.95), defectRate: ok(0.01), sampleTested: ok(true) },
     retrievedAt: DEMO_CHECKED_AT,
   };
   return {

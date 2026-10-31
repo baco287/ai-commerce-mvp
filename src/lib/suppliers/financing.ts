@@ -16,6 +16,8 @@ export type FinancingStatus =
   | "payment_terms_too_short"
   /** Zahlungsziel nur behauptet, nicht bestätigt */
   | "payment_terms_unconfirmed"
+  /** Zahlungsziel gilt erst nach Gewerbe-/USt-Prüfung, die noch aussteht */
+  | "payment_terms_pending_verification"
   /** Keine Angabe */
   | "unknown";
 
@@ -43,6 +45,14 @@ export function assessFinancing(q: SupplierQuote, rules: ScoutRules = SCOUT_RULE
       termDays,
       requiresPrefinancing: true,
       label: `Zahlungsziel ${termDays} Tage nur unbestätigt – Vorfinanzierung bis zur Bestätigung`,
+    };
+  }
+  if (q.payment.requiresBusinessVerification.status !== "missing" && q.payment.requiresBusinessVerification.value) {
+    return {
+      status: "payment_terms_pending_verification",
+      termDays,
+      requiresPrefinancing: true,
+      label: `Zahlungsziel ${termDays} Tage erst nach Gewerbe-/USt-Prüfung – bis dahin Vorfinanzierung`,
     };
   }
   if (termDays < rules.payoutDelayDays) {
