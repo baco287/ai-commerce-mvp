@@ -9,4 +9,15 @@ export * from "./scoring";
 export * from "./compare";
 export * from "./scout";
 export * from "./purchase-bridge";
-export { DEMO_ADAPTERS, DEMO_QUERIES, createDemoAdapter } from "./demo/demo-suppliers";
+export * from "./legacy";
+export * from "./dashboard";
+export * from "./links";
+export {
+  DEMO_ADAPTERS,
+  DEMO_QUERIES,
+  DEMO_REQUIRED_DOCUMENTS,
+  DEMO_SUPPLIER_QUOTES,
+  createDemoAdapter,
+  demoQuotesFor,
+  type DemoProductId,
+} from "./demo/demo-suppliers";

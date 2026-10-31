@@ -112,6 +112,18 @@ describe("MVP-Sicherheitsgrenzen", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("bietet auf der Lieferanten-Seite keine Bestellung, Freigabe oder Shopify-Änderung an", () => {
+    const files = sourceFiles(SRC).filter((f) => /[\\/](app[\\/]lieferanten|components[\\/]suppliers)[\\/]/.test(f));
+    expect(files.length).toBeGreaterThan(0);
+    for (const f of files) {
+      const code = readFileSync(f, "utf8");
+      expect(code, rel(f)).not.toMatch(/["']use (client|server)["']/);
+      expect(code, rel(f)).not.toMatch(/<button|<form|onClick|formAction/);
+      expect(code, rel(f)).not.toMatch(/lib\/shopify\/server|admin-client|sync-status/);
+      expect(code, rel(f)).not.toMatch(/\b(bestellen|jetzt kaufen|in den warenkorb)\b/i);
+    }
+  });
+
   it("hält den Shopify-Connector vom Browser fern", () => {
     const files = sourceFiles(SRC);
     const serverModules = files.filter((f) => /[\\/]lib[\\/]shopify[\\/]server[\\/]/.test(f));

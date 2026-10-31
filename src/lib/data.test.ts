@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getDashboardMetrics, getOrderRows, getProductAnalyses } from "./data";
+import { getActivities, getDashboardMetrics, getOrderRows, getProductAnalyses } from "./data";
 import { DEMO_AGENTS } from "./demo/agents";
 import { DEMO_PRODUCTS } from "./demo/products";
 
@@ -44,5 +44,22 @@ describe("Demo-Datenbasis", () => {
   it("nutzt nur bekannte Produkte in Bestellungen", () => {
     const ids = new Set(DEMO_PRODUCTS.map((p) => p.id));
     for (const r of getOrderRows()) expect(ids.has(r.order.productId)).toBe(true);
+  });
+});
+
+describe("Demo-Daten widerspruchsfrei", () => {
+  it("nennt im Aktivitäten-Feed dieselben Angebotszahlen wie der Supplier Scout", () => {
+    const analyses = getProductAnalyses();
+    const total = analyses.reduce((s, a) => s + a.offers.length, 0);
+    const excluded = analyses.reduce((s, a) => s + a.offers.filter((o) => !o.eligible).length, 0);
+    const scoutActivity = getActivities().find((a) => a.id === "a3");
+    expect(scoutActivity?.message).toBe(`${total} Demo-Angebote bewertet, ${excluded} erfüllen die Mindestanforderungen nicht.`);
+  });
+
+  it("leitet die Kalkulationsbasis aus dem Scout ab (günstigster geeigneter)", () => {
+    for (const a of getProductAnalyses()) {
+      expect(a.best?.offer.id, a.product.id).toBe(a.scout.recommendations.cheapest?.quoteId);
+      expect(a.offers.every((o) => o.offer.paymentTerms === "vorkasse"), a.product.id).toBe(true);
+    }
   });
 });

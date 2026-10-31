@@ -47,7 +47,7 @@ Dashboard: <http://localhost:3000>
 | --- | --- |
 | `/` Dashboard | Umsatz, Bestellungen, erwarteter Gewinn und Kosten, Agentenstatus, Aktivitäten, Warnungen, Freigaben, letzte Bestellungen mit Einkaufsprüfung |
 | `/produkte` | 5 Demo-Produkte: Nachfragebewertung, Verkaufspreis, Lieferantenpreise, Marge, Empfehlung, Kalkulation je Produkt |
-| `/lieferanten` | Mehrere Angebote je Produkt, Vergleich von Einkauf, Versand, Import, Lieferzeit; Markierung des günstigsten **geeigneten** Lieferanten |
+| `/lieferanten` | Supplier Scout je Produkt: günstigster, schnellster und insgesamt bester **geeigneter** Lieferant mit Kosten, Lieferzeit, Finanzierung, Marge, bestätigten/unbestätigten Angaben, offenen Nachweisen und Ausschlussgründen – Empfehlung, keine Einkaufsfreigabe |
 | `/agenten` | Die sechs KI-Agenten mit Befugnissen, Freigabepflichten und Status (Pausieren nur lokal) |
 | `/freigaben` | Freigabe-Warteschlange, Sicherheitsschalter, Grenzwerte, Startbudget 500 € |
 | `/shopify` | Shopify-Synchronisierung: **echte** Produktdaten aus dem Dev Store (die Seite liest nur) im Abgleich mit der Kontrollzentrale; Shopify-Bestand je Standort (mit `read_inventory`), getrennt vom Lieferantenbestand; letzte erfolgreiche Synchronisierung; Dry-Run der automatischen Produktanlage |

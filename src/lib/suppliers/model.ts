@@ -45,7 +45,14 @@ export interface ProductQuery {
   quantity: number;
   destinationCountry: "DE";
   /** Produktsicherheit: Welche Nachweise für dieses Produkt zwingend sind */
-  safety: { ceRequired: boolean };
+  safety: {
+    ceRequired: boolean;
+    /**
+     * Unterlagen, die vor einer Freigabe vorliegen müssen (z. B. „LFGB-Konformität“). Fehlende Unterlagen
+     * schließen ein Angebot nicht aus, werden aber als offene Compliance-Nachweise ausgewiesen.
+     */
+    requiredDocuments?: string[];
+  };
 }
 
 export type IdentityMatch = "exact" | "variant" | "different";

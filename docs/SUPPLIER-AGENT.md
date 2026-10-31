@@ -31,7 +31,10 @@ veröffentlicht nichts in Shopify. Einkäufe laufen später ausschließlich übe
 | `src/lib/suppliers/scout.ts` | Ablauf über mehrere Adapter (`scoutSuppliers`) |
 | `src/lib/suppliers/purchase-bridge.ts` | Konservative Übergabe des Zahlungsziels an die Einkaufssperre |
 | `src/lib/suppliers/quote-builder.ts` | Baukasten für Demo-Daten und Tests |
-| `src/lib/suppliers/demo/demo-suppliers.ts` | Fiktive Demo-Lieferanten in zwei Demo-Adaptern |
+| `src/lib/suppliers/demo/demo-suppliers.ts` | Fiktive Demo-Lieferanten für alle 5 Produkte in zwei Demo-Adaptern – **einzige** Quelle für Lieferantenangebote |
+| `src/lib/suppliers/dashboard.ts` | Aufbereitung für die Seite `/lieferanten`: Empfehlungen, Marge, Status je Angabe, Warn-Kennzeichen |
+| `src/lib/suppliers/legacy.ts` | Leitet das alte flache Modell (`OfferEvaluation`) aus dem Scout ab – für Produktanalyse, Bestellungen, Shopify-Pipeline |
+| `src/lib/suppliers/links.ts` | Kopplung Produkt ↔ Scout ↔ Shopify-Listing (GTIN, Handle, Varianten-SKUs, Angebots-ID) |
 | `src/lib/suppliers/index.ts` | Öffentliche Schnittstelle |
 | `src/lib/suppliers/*.test.ts` | Automatisierte Tests |
 
@@ -159,9 +162,9 @@ Gleiche Eingabe ergibt immer dieselbe Empfehlung – unabhängig von der Reihenf
 
 | Lieferant | Gesamtkosten | Lieferzeit | Zahlung | Punkte | Ergebnis |
 | --- | --- | --- | --- | --- | --- |
-| EuroLight Fulfillment (Demo), PL | 11,60 € | 3–5 Tage | 14 Tage Ziel | 88,9 | **insgesamt bester** |
-| Lumio Großhandel (Demo), DE | 17,80 € | 1–2 Tage | 30 Tage Ziel | 83,1 | **schnellster** |
-| Brightline Demo Co., CN | 11,20 € | 8–12 Tage | Vorkasse | 58,7 | **günstigster** |
+| Lumio Großhandel (Demo), DE | 13,80 € | 2–3 Tage | 30 Tage Ziel | 89,6 | **schnellster und insgesamt bester** |
+| EuroLight Fulfillment (Demo), PL | 11,60 € | 4–7 Tage | 14 Tage Ziel | 85,3 | **günstigster** (Kalkulationsbasis) |
+| Brightline Demo Co., CN | 11,20 € | 9–16 Tage | Vorkasse | – | ausgeschlossen: Lieferzeit zu lang |
 | Shinelight Wholesale (Demo) | 8,20 € | – | – | – | ausgeschlossen: nur ähnliche Variante |
 | Voltmarkt Restposten (Demo) | 10,40 € | – | – | – | ausgeschlossen: CE fehlt, Sicherheitshinweise unbestätigt |
 | Stripe & Co. Lager (Demo) | – | – | – | – | ausgeschlossen: kein Bestand |
@@ -169,11 +172,11 @@ Gleiche Eingabe ergibt immer dieselbe Empfehlung – unabhängig von der Reihenf
 
 Beispielbegründung für „insgesamt bester":
 
-> Höchste Gesamtbewertung: 88,9 von 100 (Kosten 96,6, Tempo 70, Zuverlässigkeit 91,1, Finanzierung 100).
+> Höchste Gesamtbewertung: 89,6 von 100 (Kosten 84,1, Tempo 90, Zuverlässigkeit 93,8, Finanzierung 100).
 > Gewichtung: Kosten 40 %, Tempo 25 %, Zuverlässigkeit 25 %, Finanzierung 10 %.
-> 5,8 Punkte vor Lumio Großhandel (Demo) (83,1).
-> 0,40 € teurer als das günstigste Angebot (Brightline Demo Co.), dafür insgesamt besser.
-> Bestätigtes Zahlungsziel 14 Tage – keine Vorfinanzierung.
+> 4,3 Punkte vor EuroLight Fulfillment (Demo) (85,3).
+> 2,20 € teurer als das günstigste Angebot (EuroLight Fulfillment (Demo)), dafür insgesamt besser.
+> Bestätigtes Zahlungsziel 30 Tage – keine Vorfinanzierung.
 
 ## Schnittstelle für echte Lieferanten
 
@@ -226,24 +229,42 @@ Regeln für echte Adapter:
 Für Quellen ohne GTIN-Suche (z. B. Marktplätze) kann `ProductQuery` zusätzlich `keywords` und `category`
 enthalten. Ein Treffer über Suchbegriffe ersetzt nie die Identitätsprüfung.
 
-## Integration in das Dashboard (Vorschlag, noch nicht umgesetzt)
+## Integration in das Dashboard (umgesetzt am 31.10.2026)
 
-Die bestehende Seite `/lieferanten` nutzt `evaluateOffers` aus `src/lib/calc/suppliers.ts` mit dem älteren,
-flachen Typ `SupplierOffer`. Vorschlag in drei Schritten, jeweils nach Absprache:
+- **Eine Datenquelle:** Die Demo-Angebote in `demo/demo-suppliers.ts` decken alle fünf Produkte ab und ersetzen
+  die frühere Datei `src/lib/demo/suppliers.ts`. Widersprüche wurden zugunsten der Werte aufgelöst, auf denen die
+  Shopify-„Kosten pro Artikel“ beruhen (z. B. Brightline LED 9–16 Tage, Lumio 10,90 €).
+- **Eine Bewertungslogik:** `getProductAnalyses()` (`src/lib/data.ts`) nutzt `compareQuotes`. Das alte flache Modell
+  wird über `toOfferEvaluations` (`legacy.ts`) daraus abgeleitet. **Kalkulationsbasis** für Marge, Pipeline und
+  Shopify „Kosten pro Artikel“ ist der günstigste geeignete Lieferant – unverändert 11,60 / 15,10 / 3,90 / 8,50 / 4,40 €
+  (Test: `dashboard.test.ts`, CSV-Snapshot).
+- **Seite `/lieferanten`:** `getSupplierScoutReports()` → `buildSupplierView()` (`dashboard.ts`) → Komponenten in
+  `src/components/suppliers/supplier-scout.tsx`. Je Produkt: günstigster, schnellster und insgesamt bester geeigneter
+  Lieferant (gleiche Angebote zu einer Karte zusammengefasst), Einkauf/Versand/Import, Lieferzeit nach DE,
+  Finanzierung, Marge nach `calculateMargin`, Status jeder Angabe (bestätigt/unbestätigt/fehlt), offene
+  Compliance-Nachweise (`ProductQuery.safety.requiredDocuments`), ausgeschlossene Angebote mit Gründen.
+- **Kennzeichnung:** Demo-Daten, fehlende Produktnachweise, unsichere Finanzierung, nicht gesicherte Lieferfähigkeit,
+  nicht bestätigtes Dropshipping. Jede Empfehlungskarte: „Empfehlung, keine Einkaufsfreigabe · Einkaufssperre: Vorkasse“.
+- **Keine Aktionen:** keine Knöpfe, Formulare, Client-Logik oder Server-Aktionen, kein Shopify-Zugriff – per
+  Sicherheitstest abgesichert. Die Seite ist reine Anzeige.
 
-1. **Daten bereitstellen:** In `src/lib/data.ts` eine Funktion `getSupplierScoutReports()` ergänzen, die für jedes
-   Demo-Produkt `scoutSuppliers(DEMO_QUERIES[id], DEMO_ADAPTERS)` aufruft. Da `scoutSuppliers` asynchron ist,
-   wird die Seite zur `async` Server Component.
-2. **Anzeige:** Eine neue Komponente `src/components/suppliers/scout-recommendations.tsx` zeigt je Produkt drei Karten
-   (Günstigster / Schnellster / Insgesamt bester) mit den `reasons`, ein Abzeichen „Vorfinanzierung nötig" bzw.
-   „Zahlungsziel bestätigt" und eine aufklappbare Liste der ausgeschlossenen Angebote mit Gründen. Bestehendes
-   `DemoBadge` für `report.containsDemoData`.
-3. **Freigabe-Fluss:** Die Empfehlung „insgesamt bester" als `ApprovalRequest` vom Typ `supplier_change` in die
-   Freigabeliste übernehmen. Eine Freigabe setzt nur den „freigegebenen Lieferanten" je Produkt – Einkäufe bleiben
-   über `SAFETY_SWITCHES.autoPurchaseEnabled` gesperrt.
+### Kopplung an Produktdaten und Shopify
 
-Später kann der Agent-Eintrag „Lieferanten-Scout" in `src/lib/demo/agents.ts` die Anzahl geprüfter und
-ausgeschlossener Angebote aus dem Bericht anzeigen.
+`links.ts` verbindet Produkt-ID → `ProductQuery` (GTIN, Pflichtnachweise) → Lieferantenangebote und Produkt-ID →
+Shopify-Listing (Handle, Varianten-SKUs). Die Angebots-ID der Kalkulationsbasis geht als Metafeld
+`ai_commerce.supplier_offer_id` mit der Produkteingabe an Shopify (nur beim Neuanlegen von Entwürfen).
+
+Offene Lücke für die Automatisierung: Angebote gelten heute je **Produkt**. Für Varianten (Farben, Größen) braucht es je
+Shopify-SKU die Artikelnummer des Lieferanten (`supplierSkuByShopifySku`); die Seite weist sie als offen aus.
+
+### Nächste Schritte zu echten Lieferanten
+
+1. **Manuelle Preisliste als erster echter Adapter** (`kind: "manual"`, `paid: false`, `network: false`): Angebote
+   aus einer geprüften CSV eines Großhändlers einlesen, Angaben nur mit Quelle und Prüfdatum als `confirmed`.
+2. **Echte GTINs** der Zielprodukte erfassen und je Variante die Lieferanten-Artikelnummer zuordnen.
+3. **Freigabe-Fluss:** Empfehlung „insgesamt bester" als `ApprovalRequest` (`supplier_change`) – eine Freigabe setzt nur
+   den freigegebenen Lieferanten je Produkt; Einkäufe bleiben über `SAFETY_SWITCHES.autoPurchaseEnabled` gesperrt.
+4. **Feeds/APIs** erst nach Kosten- und Netzwerkfreigabe (`paid`/`network`, Sicherheitstest `NETWORK_ALLOWED`).
 
 ## Sicherheit
 
@@ -252,3 +273,5 @@ ausgeschlossener Angebote aus dem Bericht anzeigen.
 - Angebote aus Demo-Adaptern werden immer als `demo: true` markiert; jede Begründung enthält dann
   „Demo-Daten – keine echte Einkaufsgrundlage".
 - Bestehende Sicherheitsschalter und Einkaufssperren werden nur gelesen, nie verändert.
+- Die Seite `/lieferanten` ist reine Anzeige: keine Knöpfe, Formulare oder Server-Aktionen, kein Shopify-Zugriff
+  (Sicherheitstest in `src/lib/guards/safety.test.ts`). Eine Empfehlung ist nie eine Einkaufsfreigabe.

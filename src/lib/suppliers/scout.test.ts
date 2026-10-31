@@ -9,17 +9,20 @@ import { scoutSuppliers } from "./scout";
 const ids = (r: { eligible: { quote: { id: string } }[] }) => r.eligible.map((e) => e.quote.id);
 
 describe("Supplier Scout mit Demo-Lieferanten", () => {
+  // Demo-Daten vereinheitlicht (31.10.2026): Werte wie in den bisherigen Demo-Angeboten, auf denen die
+  // Shopify-Kosten beruhen. Brightline liefert dort in 9–16 Tagen und ist damit zu langsam.
   it("findet für die LED-Leiste günstigsten, schnellsten und besten Lieferanten", async () => {
     const r = await scoutSuppliers(DEMO_QUERIES["p-led"], DEMO_ADAPTERS);
-    expect(r.recommendations.cheapest?.supplierName).toBe("Brightline Demo Co.");
+    expect(r.recommendations.cheapest?.supplierName).toBe("EuroLight Fulfillment (Demo)");
     expect(r.recommendations.fastest?.supplierName).toBe("Lumio Großhandel (Demo)");
-    expect(r.recommendations.best?.supplierName).toBe("EuroLight Fulfillment (Demo)");
-    expect(ids(r)).toEqual(["demo-eu:eurolight:p-led", "demo-eu:lumio:p-led", "demo-asia:brightline:p-led"]);
+    expect(r.recommendations.best?.supplierName).toBe("Lumio Großhandel (Demo)");
+    expect(ids(r)).toEqual(["demo-eu:lumio:p-led", "demo-eu:eurolight:p-led"]);
   });
 
   it("schließt ungeeignete Demo-Angebote mit Begründung aus", async () => {
     const r = await scoutSuppliers(DEMO_QUERIES["p-led"], DEMO_ADAPTERS);
     expect(Object.fromEntries(r.excluded.map((e) => [e.quote.supplierName, e.eligibility.exclusions.map((x) => x.code)]))).toEqual({
+      "Brightline Demo Co.": ["delivery_too_slow"],
       "Bulkware Demo Trading": ["stock_purchase_required"],
       "Shinelight Wholesale (Demo)": ["identity_unconfirmed"],
       "Stripe & Co. Lager (Demo)": ["not_deliverable"],
@@ -27,10 +30,21 @@ describe("Supplier Scout mit Demo-Lieferanten", () => {
     });
   });
 
+  it("deckt alle fünf Demo-Produkte mit mindestens einem geeigneten Angebot ab", async () => {
+    for (const query of Object.values(DEMO_QUERIES)) {
+      const r = await scoutSuppliers(query, DEMO_ADAPTERS);
+      expect(r.eligible.length, query.productId).toBeGreaterThanOrEqual(1);
+      expect(r.excluded.length, query.productId).toBeGreaterThanOrEqual(1);
+    }
+  });
+
   it("kennzeichnet Vorfinanzierung und unbestätigte Zahlungsziele", async () => {
     const led = await scoutSuppliers(DEMO_QUERIES["p-led"], DEMO_ADAPTERS);
     const fin = Object.fromEntries(led.eligible.map((e) => [e.quote.supplierId, e.financing.requiresPrefinancing]));
-    expect(fin).toEqual({ eurolight: false, lumio: false, brightline: true });
+    expect(fin).toEqual({ eurolight: false, lumio: false });
+    const bottle = await scoutSuppliers(DEMO_QUERIES["p-bottle"], DEMO_ADAPTERS);
+    const trinkgut = bottle.eligible.find((e) => e.quote.supplierId === "trinkgut");
+    expect(trinkgut?.financing).toMatchObject({ status: "payment_terms_pending_verification", requiresPrefinancing: true });
 
     const stand = await scoutSuppliers(DEMO_QUERIES["p-stand"], DEMO_ADAPTERS);
     const deskpro = stand.eligible.find((e) => e.quote.supplierId === "deskpro");
@@ -108,7 +122,7 @@ describe("Adapter-Sicherheit", () => {
     });
     const r = await scoutSuppliers(DEMO_QUERIES["p-led"], [broken, ...DEMO_ADAPTERS]);
     expect(r.adapters.find((a) => a.adapterId === "broken")).toMatchObject({ status: "error", message: "Zeitüberschreitung" });
-    expect(r.recommendations.best?.supplierName).toBe("EuroLight Fulfillment (Demo)");
+    expect(r.recommendations.best?.supplierName).toBe("Lumio Großhandel (Demo)");
   });
 
   it("erzwingt die Demo-Kennzeichnung und ignoriert Angebote für andere Produkte", async () => {
