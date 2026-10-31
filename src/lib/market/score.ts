@@ -5,6 +5,7 @@
 // - Unsichere Bestandteile (Demo-Werte, nicht verlässlich berechnete Marge) erhöhen die Unsicherheit zur Hälfte.
 // - Kein Bestandteil wird geschätzt oder erfunden. Die Bewertung entscheidet nie über eine Freigabe.
 
+import { MARKET_SCAN } from "./config";
 import type { InterestMetrics, MarketCandidate, SimulatedSignals } from "./model";
 import { RISK_LABELS, type RiskLevel } from "./risk";
 
@@ -119,12 +120,14 @@ export function scoreOpportunity(input: ScoreInput): OpportunityScore {
   const add = (key: ComponentKey, value: number | null, status: ScoreComponent["status"], detail: string) =>
     comps.push({ key, label: COMPONENT_LABELS[key], weight: SCORE_WEIGHTS[key], value: value === null ? null : round1(value), status: value === null ? "missing" : status, detail });
 
-  // Nachfrage
-  const real = c.signals.find((s) => !s.demo && s.interest)?.interest;
+  // Nachfrage (ein zwischengespeichertes Signal ist gekennzeichnet und erhöht die Unsicherheit)
+  const realSignal = c.signals.find((s) => !s.demo && s.interest);
+  const real = realSignal?.interest;
   const sim = c.signals.find((s) => s.demo && s.simulated)?.simulated;
   if (real) {
     const d = demandFromInterest(real);
-    add("demand", d.value, d.partial ? "uncertain" : "ok", `Öffentliches Interesse: ${d.detail}`);
+    const cachedNote = realSignal?.cached ? ` – zwischengespeichert vom ${realSignal.retrievedAt.slice(0, 10)}` : "";
+    add("demand", d.value, d.partial ? "uncertain" : "ok", `Öffentliches Interesse: ${d.detail}${cachedNote}`);
   } else if (sim) {
     add("demand", demandFromSimulated(sim), "uncertain", "Simulierte Demo-Signale – keine reale Nachfrage");
   } else add("demand", null, "missing", "Keine Nachfragedaten");
@@ -157,7 +160,8 @@ export function scoreOpportunity(input: ScoreInput): OpportunityScore {
   add("dataQuality", dq.value, "ok", dq.detail);
 
   const score = Math.round(comps.reduce((s, x) => s + x.weight * (x.value ?? 0), 0));
-  const uncertainty = Math.min(1, comps.reduce((s, x) => s + (x.status === "missing" ? x.weight : x.status === "uncertain" ? x.weight / 2 : 0), 0));
+  const cachedPenalty = realSignal?.cached ? MARKET_SCAN.cachedSignalPenalty : 0;
+  const uncertainty = Math.min(1, cachedPenalty + comps.reduce((s, x) => s + (x.status === "missing" ? x.weight : x.status === "uncertain" ? x.weight / 2 : 0), 0));
   const highlights = comps
     .filter((x) => x.status === "ok" && x.value !== null && x.value >= 60 && x.key !== "dataQuality")
     .sort((a, b) => b.weight * (b.value ?? 0) - a.weight * (a.value ?? 0))

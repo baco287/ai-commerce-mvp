@@ -1,5 +1,6 @@
 import { Ban, Cable, Lock, ShieldAlert } from "lucide-react";
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import { ProductSuppliers, ScoutOverview, StatusLegend } from "@/components/suppliers/supplier-scout";
 import { Badge, DemoBadge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -12,6 +13,8 @@ import { buildSupplierView, SCOUT_RULES } from "@/lib/suppliers";
 export const metadata: Metadata = { title: "Lieferanten – Supplier Scout" };
 
 export default async function SuppliersPage() {
+  // Dynamisch je Anfrage: Die Seite liest lokale Laufzeitdaten (.data/) – nie beim Build vorrendern (Paket I).
+  await connection();
   const reports = await getSupplierScoutReports();
   const views = reports.map(({ product, report }) =>
     buildSupplierView(product, report, { adapters: report.adapters, containsDemoData: report.containsDemoData }),

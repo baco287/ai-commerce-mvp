@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from "vitest";
-import { getProductAnalyses } from "@/lib/data";
 import { DEMO_PRODUCTS } from "@/lib/demo/products";
 import { DEMO_LISTINGS } from "@/lib/shopify/listings";
 import { DEMO_QUERIES, demoQuotesFor, type ProductQuery, type SupplierQuote } from "@/lib/suppliers";
@@ -10,7 +9,6 @@ import { createDemoMarketSource, createWikimediaSource, RequestBudget, SourceHtt
 import { emptyMarketState, mergeRun } from "./state";
 
 const NOW = new Date("2026-10-31T08:00:00Z");
-const analyses = new Map(getProductAnalyses().map((a) => [a.product.id, a]));
 
 /** Abhängigkeiten wie im Dashboard: Demo-Angebote für Demo-Produkte, sonst nur die übergebenen echten Angebote. */
 function deps(realQuotes: SupplierQuote[] = []): EvaluationDeps {
@@ -19,8 +17,10 @@ function deps(realQuotes: SupplierQuote[] = []): EvaluationDeps {
     now: NOW,
     supplierInput: (c) => (c.productId && queries[c.productId] ? { query: queries[c.productId], quotes: [...demoQuotesFor(c.productId), ...realQuotes] } : null),
     product: (id) => DEMO_PRODUCTS.find((p) => p.id === id),
-    analysis: (id) => analyses.get(id),
-    listing: (id) => DEMO_LISTINGS.find((l) => l.productId === id),
+    draftSource: (c) => {
+      const demoListing = c.demo ? DEMO_LISTINGS.find((l) => l.productId === c.productId) : undefined;
+      return demoListing ? { demoListing } : null;
+    },
   };
 }
 
@@ -69,6 +69,32 @@ describe("Market-Scout-Pipeline: Kandidat bewerten", () => {
     expect(r.draft.title).toMatch(/^\[DEMO\]/);
     expect(r.profit?.reliable).toBe(false);
     expect(r.compliance?.status).toBe("offen");
+  });
+
+  it("Profit Controller: Demo mit belegtem 30-Tage-Ziel nur gesperrt, Demo mit Vorkasse zurückgestellt (Mittel unbelegt)", async () => {
+    const source = createDemoMarketSource(NOW);
+    const topics = await source.discover(new RequestBudget(0));
+    const results = await Promise.all(topics.map(async (t) => evaluateCandidate({ ...t, signals: [(await source.measure(t, new RequestBudget(0)))!] }, deps())));
+    const byId = new Map(results.map((r) => [r.candidate.productId, r]));
+
+    const led = byId.get("p-led")!;
+    expect(led.stages.find((s) => s.key === "profit")).toMatchObject({ status: "blocked" });
+    expect(led.reasonCodes).toEqual(expect.arrayContaining(["LIQ_TERM_UNSECURED", "DEMO_DATA", "MARGIN_UNRELIABLE"]));
+    expect(led.stages.find((s) => s.key === "draft")?.status).toBe("ok");
+    expect(led.state).toBe("blocked");
+
+    const bottle = byId.get("p-bottle")!;
+    expect(bottle.state).toBe("deferred");
+    expect(bottle.reasonCodes).toEqual(expect.arrayContaining(["LIQ_PREFINANCING_UNFUNDED", "LIQ_CAPACITY_ZERO"]));
+    expect(bottle.stages.find((s) => s.key === "draft")?.status).toBe("skipped");
+
+    // Ohne Kontonachweis nirgends „vorfinanzierungsfrei gesichert“, keine Kapazität, keine geplante Menge, kein NaN
+    for (const r of results.filter((x) => x.liquidity)) {
+      expect(r.liquidity!.securedWithoutPrefinancing).toBe(false);
+      expect(r.liquidity!.maxOpenOrders).toBe(0);
+      expect(r.availability?.every((a) => a.plannedAvailable === 0)).toBe(true);
+      expect(JSON.stringify(r.profit)).not.toMatch(/NaN|Infinity/);
+    }
   });
 
   it("verwendet für echte Kandidaten nie Demo-Lieferanten", async () => {

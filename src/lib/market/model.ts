@@ -25,7 +25,8 @@ export const SIGNAL_KIND_LABELS: Record<SignalKind, string> = {
 export interface MarketSourceInfo {
   id: string;
   name: string;
-  kind: "api" | "demo";
+  /** api = externe Schnittstelle; demo = simulierte Daten; manual = von Hand gepflegte lokale Datei (Katalog) */
+  kind: "api" | "demo" | "manual";
   signalKind: SignalKind;
   /** Verursacht der Abruf Kosten? Dann nur mit SAFETY_SWITCHES.paidApiCallsEnabled (heute aus). */
   paid: boolean;
@@ -78,6 +79,12 @@ export interface MarketSignal {
   reference: string;
   interest?: InterestMetrics;
   simulated?: SimulatedSignals;
+  /**
+   * Signal stammt nicht aus diesem Lauf, sondern aus dem gespeicherten Stand (state.json, höchstens
+   * MARKET_SCAN.staleAfterDays alt). `retrievedAt` bleibt der Zeitpunkt der ursprünglichen Messung.
+   * Erhöht die Unsicherheit um MARKET_SCAN.cachedSignalPenalty.
+   */
+  cached?: boolean;
 }
 
 /** Ein Produktkandidat aus der Marktrecherche. */
@@ -88,6 +95,8 @@ export interface MarketCandidate {
   category?: string;
   /** Verknüpftes Produkt der Kontrollzentrale, falls das Thema einem bekannten Produkt entspricht */
   productId?: string;
+  /** Produkt des lokalen Zielproduktkatalogs (.data/catalog/products.json) – echte Produktidentität mit Varianten */
+  catalogId?: string;
   /** EAN/GTIN – nötig, damit der Supplier Scout Angebote sicher zuordnen kann */
   gtin?: string;
   /** Wie der Kandidat gefunden wurde, z. B. „Kategorie: Haushaltsgerät“ */
@@ -95,4 +104,12 @@ export interface MarketCandidate {
   /** Kandidat stammt aus Demo-Daten (dann sind alle Folgeschritte Demo) */
   demo: boolean;
   signals: MarketSignal[];
+}
+
+/**
+ * Identität eines Themas über Quellen hinweg (Dubletten-Vermeidung im Lauf): Katalogprodukt vor bekanntem Produkt vor
+ * Quellen-Schlüssel. Demo und echt werden NIE zusammengeführt – der Präfix trennt sie.
+ */
+export function identityKey(t: { key: string; demo: boolean; catalogId?: string; productId?: string }): string {
+  return (t.demo ? "demo|" : "real|") + (t.catalogId ? `c:${t.catalogId}` : t.productId ? `p:${t.productId}` : t.key);
 }

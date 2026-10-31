@@ -49,7 +49,8 @@ export function toShopifyCsv(inputs: ProductSetInput[]): string {
         "Option1 name": first ? p.productOptions[0].name : "",
         "Option1 value": v.optionValues[0].name,
         Price: v.price,
-        "Cost per item": v.inventoryItem.cost,
+        // Ohne Kosten (echte Entwürfe tragen nie Einkaufskosten) bleibt die Zelle leer
+        "Cost per item": v.inventoryItem.cost ?? "",
         "Charge tax": String(v.taxable),
         "Inventory tracker": v.inventoryItem.tracked ? "shopify" : "",
         "Inventory quantity": "0",

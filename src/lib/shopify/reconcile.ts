@@ -137,7 +137,8 @@ function compareProduct(expected: ProductSetInput, actual: ShopifyProduct, optio
       add(`Bestand verfolgt ${sku}`, ev.inventoryItem.tracked ? "ja" : "nein", av.inventory.tracked ? "ja" : "nein");
       const quantity = String(av.inventory.quantity ?? 0);
       add(`Bestand ${sku}`, "0", av.inventory.locationsTruncated ? `${quantity}+ (unvollständig, mehr als 10 Standorte)` : quantity);
-      add(`Kosten ${sku}`, ev.inventoryItem.cost, av.inventory.unitCost ?? "nicht gepflegt");
+      // Kosten nur vergleichen, wenn die Soll-Eingabe welche trägt (Demo-Weg); echte Entwürfe haben nie Kosten.
+      if (ev.inventoryItem.cost !== undefined) add(`Kosten ${sku}`, ev.inventoryItem.cost, av.inventory.unitCost ?? "nicht gepflegt");
     } else if (options.inventoryRead) {
       diffs.push({ field: `Bestand ${sku}`, expected: "0", actual: "nicht gelesen" });
     }

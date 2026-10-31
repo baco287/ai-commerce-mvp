@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getProductAnalyses } from "@/lib/data";
 import { ShopifyGuardError } from "./guards";
 import { DEMO_IMAGE_BASE_URL } from "./listings";
-import type { ProductSetInput } from "./product-input";
+import { buildDraftInput, type ProductSetInput } from "./product-input";
 import { planProductSync } from "./sync";
 import { buildWriteRequest, type WriteOperation } from "./write-operations";
 
@@ -93,5 +93,20 @@ describe("Schreib-Operationen (Positivliste)", () => {
       const { document } = build(op);
       expect(document, op.kind).not.toMatch(/publish|Publication|Delete|delete|order|Order|status:\s*ACTIVE/);
     }
+  });
+});
+
+describe("Schreib-Operationen: Phase 1 – nur vollständig gekennzeichnete Demo-Entwürfe (Paket I)", () => {
+  it("lehnt create-draft für echte Eingaben ab – auch wenn sie sonst alle Guards erfüllen", () => {
+    const real = buildDraftInput({
+      demo: false,
+      productRef: "catalog:kabelkanal",
+      listing: { handle: "kabelkanal", title: "Kabelkanal selbstklebend", descriptionHtml: "<p>Kabelkanal</p>", productType: "Kabelmanagement", categoryTag: "buero" },
+      variants: [{ shopSku: "KK-1", priceGross: 39.9 }],
+      images: [],
+      vendor: "Kabelfix",
+    });
+    expect(() => build({ kind: "create-draft", input: real })).toThrow(/Freigabe-Akte/);
+    expect(() => build({ kind: "create-draft", input: { ...draft(), handle: "ohne-demo-praefix" } })).toThrow(ShopifyGuardError);
   });
 });

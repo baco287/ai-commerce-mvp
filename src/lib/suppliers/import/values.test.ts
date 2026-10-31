@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { resolveColumns } from "./columns";
 import { parseCsv } from "./csv";
+import { readRows } from "./records";
 import { parseBool, parseCount, parseCountry, parseDate, parseDeliveryDays, parseGtin, parseMoney, parsePaymentTerms } from "./values";
 
 const ok = <T>(r: { value: T } | { error: string }) => ("value" in r ? r.value : `FEHLER: ${r.error}`);
@@ -125,5 +127,17 @@ describe("Spaltenzuordnung", () => {
 
     // Umlaute in zerlegter Form (NFD, z. B. aus macOS-Exporten)
     expect(resolveColumns(["Lieferant", "Artikelnummer", "Bezeichnung", "EK netto", "Währung"]).errors).toEqual([]);
+  });
+});
+
+describe("Preislisten: optionale Spalte Variantenkennung (Paket B)", () => {
+  it("erkennt „Variante“ als Variantenkennung und übernimmt sie (höchstens 60 Zeichen)", () => {
+    const table = parseCsv("Lieferant;Artikelnummer;Bezeichnung;EK netto;Währung;Variante\nBeispiel;A1;Kabelkanal;4,00;EUR;Schwarz / 2 m\nBeispiel;A2;Kabelkanal;4,00;EUR;" + "x".repeat(61));
+    const cols = resolveColumns(table.headers);
+    expect(cols.errors).toEqual([]);
+    expect(cols.index.variantLabel).toBe(5);
+    const rows = readRows(table, cols, {}, "2026-10-31T10:00:00.000Z");
+    expect(rows[0].data?.variantLabel).toBe("Schwarz / 2 m");
+    expect(rows[1].status).toBe("rejected");
   });
 });

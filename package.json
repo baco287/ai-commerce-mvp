@@ -3,8 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -H 127.0.0.1",
+    "prebuild": "tsx scripts/check-public-data.ts",
     "build": "next build",
+    "prestart": "tsx scripts/check-public-data.ts",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
@@ -14,7 +16,8 @@
     "shopify:csv": "vitest run -u src/lib/shopify/csv-export.test.ts",
     "shopify:sync": "tsx --conditions=react-server --env-file-if-exists=.env.local scripts/shopify-sync.ts",
     "suppliers:import": "tsx --conditions=react-server scripts/supplier-import.ts",
-    "market:scan": "tsx --conditions=react-server scripts/market-scan.ts"
+    "market:scan": "tsx --conditions=react-server scripts/market-scan.ts",
+    "pipeline:dry-run": "tsx --conditions=react-server scripts/market-scan.ts --save"
   },
   "dependencies": {
     "lucide-react": "^1.59.0",

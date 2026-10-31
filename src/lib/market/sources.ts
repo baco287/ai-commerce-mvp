@@ -2,8 +2,10 @@
 // Netzwerk gibt es hier nicht: Reale Quellen bekommen die Abruffunktion von außen (server/wikimedia-client.ts).
 
 import { DEMO_PRODUCTS } from "@/lib/demo/products";
+import type { CatalogValidation } from "./catalog";
 import { interestMetrics } from "./interest";
 import type { MarketSignal, MarketSourceInfo } from "./model";
+import type { ReasonCode } from "./reasons";
 import {
   articleUrl,
   categoryMembersUrl,
@@ -52,8 +54,12 @@ export interface DiscoveredTopic {
   title: string;
   category?: string;
   productId?: string;
+  /** Produkt des lokalen Zielproduktkatalogs */
+  catalogId?: string;
   discoveredVia: string;
   demo: boolean;
+  /** Ungültiger Katalogeintrag: wird nicht gemessen und nicht bewertet, sondern mit diesen Gründen zurückgestellt */
+  invalid?: { codes: ReasonCode[]; messages: string[] };
 }
 
 export interface MarketSource {
@@ -80,19 +86,34 @@ export interface WikimediaSourceOptions {
   fetchJson: FetchJson;
   now: Date;
   categories: readonly string[];
-  linkedTopics: { title: string; productId: string }[];
+  /**
+   * Feste Themen mit Verknüpfung – genau eines von `productId` (bekanntes Produkt der Kontrollzentrale) oder
+   * `catalogId` (Zielproduktkatalog, Titel = `wikiTitle`). Bei gleichem Artikel hat die Katalogverknüpfung Vorrang;
+   * mehrere Katalogprodukte mit demselben Artikel: das erste gewinnt.
+   */
+  linkedTopics: { title: string; productId?: string; catalogId?: string }[];
   membersPerCategory: number;
 }
 
 /** Reale Quelle: Wikipedia-Kategorien für die Entdeckung, Pageviews-Zeitreihen für die Messung. */
 export function createWikimediaSource(o: WikimediaSourceOptions): MarketSource {
+  for (const t of o.linkedTopics) {
+    if (!t.productId === !t.catalogId) throw new Error(`Festes Thema „${t.title}“: genau eines von productId oder catalogId angeben.`);
+  }
   const window = requestWindow(o.now);
   return {
     info: WIKIMEDIA_SOURCE,
     async discover(budget) {
       const topics = new Map<string, DiscoveredTopic>();
       for (const t of o.linkedTopics) {
-        topics.set(wikiKey(t.title), { key: wikiKey(t.title), title: t.title, productId: t.productId, discoveredVia: "Feste Themenliste (bekanntes Produkt)", demo: false });
+        const key = wikiKey(t.title);
+        if (topics.get(key)?.catalogId) continue;
+        topics.set(
+          key,
+          t.catalogId
+            ? { key, title: t.title, catalogId: t.catalogId, discoveredVia: "Wikipedia-Artikel zum Katalogprodukt", demo: false }
+            : { key, title: t.title, productId: t.productId, discoveredVia: "Feste Themenliste (bekanntes Produkt)", demo: false },
+        );
       }
       for (const [index, category] of o.categories.entries()) {
         budget.take();
@@ -164,6 +185,48 @@ export function createDemoMarketSource(now: Date): MarketSource {
         reference: "src/lib/demo/products.ts",
         simulated: { ...product.signals },
       };
+    },
+  };
+}
+
+export const CATALOG_MARKET_SOURCE_INFO: MarketSourceInfo = {
+  id: "catalog",
+  name: "Lokaler Zielproduktkatalog (.data/catalog/products.json)",
+  kind: "manual",
+  signalKind: "estimate",
+  paid: false,
+  network: false,
+};
+
+/**
+ * Katalog-Quelle (offline): jedes Katalogprodukt wird ein Kandidat `catalog:<id>`. Der Katalog ist KEIN
+ * Nachfragesignal – `measure` liefert immer null; Nachfrage kommt aus Wikimedia (`wikiTitle`, nur --live) oder
+ * aus dem zwischengespeicherten Signal. Ungültige Einträge erscheinen mit Grund, werden aber nicht bewertet.
+ */
+export function createCatalogMarketSource(catalog: Pick<CatalogValidation, "products" | "invalid">): MarketSource {
+  return {
+    info: CATALOG_MARKET_SOURCE_INFO,
+    async discover() {
+      const valid: DiscoveredTopic[] = catalog.products.map((p) => ({
+        key: `catalog:${p.id}`,
+        title: p.title,
+        category: p.category,
+        catalogId: p.id,
+        discoveredVia: "Lokaler Zielproduktkatalog",
+        demo: false,
+      }));
+      const invalid: DiscoveredTopic[] = catalog.invalid.map((x) => ({
+        key: `catalog:${x.id}`,
+        title: `Katalogeintrag ${x.id}`,
+        catalogId: x.id,
+        discoveredVia: "Lokaler Zielproduktkatalog (ungültig)",
+        demo: false,
+        invalid: { codes: [...x.codes], messages: [...x.messages] },
+      }));
+      return [...valid, ...invalid];
+    },
+    async measure() {
+      return null;
     },
   };
 }

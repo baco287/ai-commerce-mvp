@@ -24,11 +24,21 @@ vi.mock("@/lib/market/server/market-store", async (importOriginal) => {
   return { ...actual, loadMarketState: () => ({ state: emptyMarketState() }), isStopRequested: () => false };
 });
 
+// Der lokale Zielproduktkatalog (.data/catalog) bleibt in Tests leer – außer ein Test übergibt ausdrücklich eine Datei.
+vi.mock("@/lib/market/server/catalog-store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/market/server/catalog-store")>();
+  return {
+    ...actual,
+    loadCatalog: (now: Date, file?: string) => (file === undefined ? { products: [], invalid: [], sha256: null } : actual.loadCatalog(now, file)),
+  };
+});
+
 vi.mock("@/lib/suppliers/server/offer-store", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/suppliers/server/offer-store")>();
   return {
     ...actual,
-    loadOfferStore: () => ({ store: testSupplierData.store }),
-    loadEvidence: () => ({ entries: testSupplierData.evidence, errors: [] }),
+    // Mit ausdrücklich übergebener Datei (nur Tests mit Temp-Verzeichnis) wird die echte Ladefunktion geprüft.
+    loadOfferStore: (file?: string) => (file === undefined ? { store: testSupplierData.store } : actual.loadOfferStore(file)),
+    loadEvidence: (file?: string) => (file === undefined ? { entries: testSupplierData.evidence, errors: [] } : actual.loadEvidence(file)),
   };
 });

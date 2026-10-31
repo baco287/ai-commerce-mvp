@@ -1,5 +1,6 @@
 import { ArrowRight, Info, Lock, OctagonAlert, Receipt, ShoppingCart, TrendingUp, TriangleAlert, Wallet } from "lucide-react";
 import Link from "next/link";
+import { connection } from "next/server";
 import { AgentIcon } from "@/components/agents/agent-icon";
 import { RevenueChart } from "@/components/dashboard/revenue-chart";
 import { Badge, DemoBadge } from "@/components/ui/badge";
@@ -16,7 +17,9 @@ import type { Severity } from "@/lib/types";
 
 const SEVERITY_ICON: Record<Severity, typeof Info> = { info: Info, warning: TriangleAlert, critical: OctagonAlert };
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  // Dynamisch je Anfrage: Die Seite liest lokale Laufzeitdaten (.data/) – nie beim Build vorrendern (Paket I).
+  await connection();
   const m = getDashboardMetrics();
   const agents = getAgents();
   const activeAgents = agents.filter((a) => a.status === "active");

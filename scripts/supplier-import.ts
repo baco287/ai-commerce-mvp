@@ -117,7 +117,10 @@ function main(): number {
   }
   const now = new Date();
   const text = readFileSync(file, "utf8");
-  const knownGtins = new Map(Object.values(DEMO_QUERIES).map((q) => [q.gtin, q.productId] as const));
+  // Demo-Zuordnung nur für synthetische Testdaten. Echte Zeilen werden nie Demo-Produkten zugeordnet – auch nicht über
+  // Demo-GTINs –, sondern in der Market-Pipeline über den lokalen Zielproduktkatalog (Paket I).
+  const knownGtins: ReadonlyMap<string, string> = synthetic ? new Map(Object.values(DEMO_QUERIES).map((q) => [q.gtin, q.productId] as const)) : new Map();
+  if (!synthetic) log("Hinweis: Echte Zeilen werden über den Zielproduktkatalog zugeordnet (npm run market:scan), nicht über Demo-Produkte.");
   const plan = planImport({
     text,
     file: basename(file),

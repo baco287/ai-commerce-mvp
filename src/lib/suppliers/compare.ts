@@ -4,6 +4,8 @@
 import { formatDays, formatEur } from "@/lib/format";
 import { checkEligibility, costBreakdown, type CostBreakdown, type Eligibility, type Finding } from "./eligibility";
 import { assessFinancing, type FinancingAssessment, type FinancingStatus } from "./financing";
+import { DEFAULT_FUNDING_CONTEXT, type FundingContext } from "./funding";
+import { assessLiquidity, LIQUIDITY_RULES, LIQUIDITY_STATUS_RANK, type LiquidityAssessment, type LiquidityRules, type LiquidityStatus } from "./liquidity";
 import { factValue, type ProductQuery, type SupplierQuote } from "./model";
 import { SCOUT_RULES, type ScoutRules } from "./rules";
 import { scoreQuote, type ScoreBreakdown } from "./scoring";
@@ -203,4 +205,80 @@ export function compareQuotes(query: ProductQuery, quotes: SupplierQuote[], rule
     },
     notes,
   };
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Kalkulationsbasis über alle Varianten eines Produkts – Liquidität vor Preis
+// ---------------------------------------------------------------------------------------------------------------
+
+/** Ein Lieferant, der JEDE Variante mit einem geeigneten Angebot abdeckt. */
+export interface BasisCandidate {
+  supplierId: string;
+  supplierName: string;
+  demo: boolean;
+  /** Je Variante das Angebot dieses Lieferanten (bei mehreren geeigneten das günstigste) */
+  perVariant: { shopSku: string; evaluation: QuoteEvaluation; offerKey?: string }[];
+}
+
+/** Angebots-Schlüssel `supplierId::supplierSku` – nur für importierte Preislisten-Angebote. VERTRAULICH (Journal). */
+export const priceListOfferKey = (q: SupplierQuote): string | undefined =>
+  q.provenance?.kind === "price_list" ? `${q.supplierId}::${q.identity.supplierSku}` : undefined;
+
+const maxOf = (values: number[]) => values.reduce((a, b) => Math.max(a, b), 0);
+const perUnitOf = (e: QuoteEvaluation) => e.cost?.perUnit ?? Number.POSITIVE_INFINITY;
+const maxDaysOf = (e: QuoteEvaluation) => e.deliveryDays?.max ?? Number.POSITIVE_INFINITY;
+
+/**
+ * EINE Basisauswahl für ein Produkt mit einer oder mehreren Varianten (Market-Pipeline; Dashboard-Anbindung siehe
+ * docs/MARKET-SCOUT.md). In Frage kommen nur Lieferanten mit einem geeigneten Angebot für JEDE Variante – verschiedene
+ * Lieferanten je Variante gibt es nicht. Für jeden möglichen Lieferanten läuft die Liquiditätsbewertung mit
+ * Worst-Case-Auszahlung (nicht SCOUT_RULES.payoutDelayDays). Deterministische Rangfolge:
+ *   1. Liquiditätsstatus (belegtes Zahlungsziel < unbelegtes Zahlungsziel < Vorfinanzierung aus Mitteln < alle übrigen)
+ *   2. kleinste Worst-Case-Kosten je Stück über die Varianten
+ *   3. kleinste maximale Lieferzeit
+ *   4. supplierId alphabetisch
+ * `priceGross` (Verkaufspreis brutto, falls bekannt) beziffert nur das Erstattungsrisiko und die Kapazität der
+ * Liquiditätsbewertung; der Status und damit die Rangfolge hängen nicht davon ab.
+ */
+export function selectCalculationBasis(
+  perVariant: { shopSku: string; comparison: SupplierComparison }[],
+  ctx: FundingContext = DEFAULT_FUNDING_CONTEXT,
+  rules: LiquidityRules = LIQUIDITY_RULES,
+  priceGross: number | null = null,
+): { basis: BasisCandidate | null; liquidity: LiquidityAssessment | null; considered: { supplierId: string; status: LiquidityStatus }[] } {
+  if (perVariant.length === 0) return { basis: null, liquidity: null, considered: [] };
+  // Je Variante: Lieferant → günstigstes geeignetes Angebot (Gleichstand: Lieferzeit, dann Angebots-ID)
+  const byVariant = perVariant.map(({ shopSku, comparison }) => {
+    const best = new Map<string, QuoteEvaluation>();
+    for (const e of comparison.eligible) {
+      const current = best.get(e.quote.supplierId);
+      if (!current || (perUnitOf(e) - perUnitOf(current) || maxDaysOf(e) - maxDaysOf(current) || byId(e, current)) < 0) best.set(e.quote.supplierId, e);
+    }
+    return { shopSku, best };
+  });
+  const supplierIds = [...byVariant[0].best.keys()].filter((id) => byVariant.every((v) => v.best.has(id))).sort();
+  const candidates = supplierIds.map((supplierId): BasisCandidate => {
+    const variants = byVariant.map(({ shopSku, best }) => {
+      const evaluation = best.get(supplierId)!;
+      const offerKey = priceListOfferKey(evaluation.quote);
+      return { shopSku, evaluation, ...(offerKey !== undefined && { offerKey }) };
+    });
+    return {
+      supplierId,
+      supplierName: variants[0].evaluation.quote.supplierName,
+      demo: variants.some((v) => v.evaluation.quote.demo),
+      perVariant: variants,
+    };
+  });
+  const ranked = candidates
+    .map((basis) => ({ basis, liquidity: assessLiquidity(basis, priceGross, ctx, rules) }))
+    .sort(
+      (a, b) =>
+        LIQUIDITY_STATUS_RANK[a.liquidity.status] - LIQUIDITY_STATUS_RANK[b.liquidity.status] ||
+        maxOf(a.basis.perVariant.map((v) => perUnitOf(v.evaluation))) - maxOf(b.basis.perVariant.map((v) => perUnitOf(v.evaluation))) ||
+        maxOf(a.basis.perVariant.map((v) => maxDaysOf(v.evaluation))) - maxOf(b.basis.perVariant.map((v) => maxDaysOf(v.evaluation))) ||
+        (a.basis.supplierId < b.basis.supplierId ? -1 : a.basis.supplierId > b.basis.supplierId ? 1 : 0),
+    );
+  const considered = ranked.map((r) => ({ supplierId: r.basis.supplierId, status: r.liquidity.status }));
+  return { basis: ranked[0]?.basis ?? null, liquidity: ranked[0]?.liquidity ?? null, considered };
 }

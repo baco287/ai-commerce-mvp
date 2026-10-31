@@ -8,6 +8,7 @@ import { SAFETY_SWITCHES } from "@/lib/config/budget";
 import type { Product } from "@/lib/types";
 import type { QuoteEvaluation, RecommendationKind, SupplierComparison } from "./compare";
 import type { FinancingStatus } from "./financing";
+import { openRequiredDocuments, requiredDocumentLabels } from "./documents";
 import { shipsFromEu } from "./eligibility";
 import { assessFunding, type FundingAssessment } from "./funding";
 import { factLevel, factValue, type Fact, type FactLevel, type FactStatus, type ProductQuery } from "./model";
@@ -130,9 +131,6 @@ export function recommendationTitle(kinds: RecommendationKind[]): string {
 
 const cell = <T>(f: Fact<T>): FactCell<T> => ({ value: factValue(f), status: f.status, level: factLevel(f) });
 
-/** Liegt ein Pflichtdokument vor? Dokumentnamen beginnen mit der geforderten Bezeichnung. */
-const hasDocument = (documents: string[], required: string) => documents.some((d) => d.startsWith(required));
-
 function factLists(e: QuoteEvaluation) {
   const q = e.quote;
   const entries: [string, Fact<unknown>][] = [
@@ -244,7 +242,8 @@ export function toOfferView(e: QuoteEvaluation, query: ProductQuery, priceGross:
   const q = e.quote;
   const funding = assessFunding({ quote: q, financing: e.financing, cost: e.cost });
   const documents = q.safety.documents;
-  const openDocuments = (query.safety.requiredDocuments ?? []).filter((d) => !hasDocument(documents, d));
+  // Abgleich ausschließlich über Dokumenttypen (documents.ts) – Freitext erfüllt nie eine Pflicht.
+  const openDocuments = openRequiredDocuments(q, query);
   const margin = e.cost ? calculateMargin(priceGross, e.cost.perUnit) : null;
   const importCost = cell(q.pricing.importCost);
   return {
@@ -320,7 +319,7 @@ export function buildSupplierView(
     productName: product.name,
     priceGross: product.targetPriceGross,
     complianceNotes: product.complianceNotes,
-    requiredDocuments: query.safety.requiredDocuments ?? [],
+    requiredDocuments: requiredDocumentLabels(query),
     recommendations,
     eligible,
     excluded,

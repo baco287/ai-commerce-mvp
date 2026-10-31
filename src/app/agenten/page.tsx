@@ -1,5 +1,6 @@
 import { Info } from "lucide-react";
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import Link from "next/link";
 import { AgentBoard } from "@/components/agents/agent-board";
 import { MarketRunStatus } from "@/components/market/market-scout-panel";
@@ -11,6 +12,8 @@ import { getAgents, getMarketScoutOverview } from "@/lib/data";
 export const metadata: Metadata = { title: "KI-Agenten" };
 
 export default async function AgentsPage() {
+  // Dynamisch je Anfrage: Die Seite liest lokale Laufzeitdaten (.data/) – nie beim Build vorrendern (Paket I).
+  await connection();
   const agents = getAgents();
   const market = await getMarketScoutOverview();
   const counts = market.candidates.reduce<Record<string, number>>((acc, c) => ({ ...acc, [c.latest.state]: (acc[c.latest.state] ?? 0) + 1 }), {});

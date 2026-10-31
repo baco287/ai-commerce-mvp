@@ -8,6 +8,7 @@ export type ImportField =
   | "gtin"
   | "brand"
   | "mpn"
+  | "variantLabel"
   | "title"
   | "unitPrice"
   | "currency"
@@ -46,6 +47,7 @@ export const FIELD_SPECS: Record<ImportField, FieldSpec> = {
     required: false,
     aliases: ["herstellerartikelnummer", "hersteller artikelnummer", "hersteller nr", "mpn", "manufacturer part number"],
   },
+  variantLabel: { label: "Variantenkennung", required: false, aliases: ["variantenkennung", "variante", "variant", "variant label"] },
   title: { label: "Artikelbezeichnung", required: true, aliases: ["artikelbezeichnung", "bezeichnung", "artikel", "produktname", "title", "name", "product name"] },
   unitPrice: {
     label: "Einkaufspreis netto",

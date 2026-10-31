@@ -13,6 +13,8 @@ export interface ImportedOfferData {
   gtin?: string;
   brand?: string;
   mpn?: string;
+  /** Variantenkennung laut Lieferant, z. B. „Schwarz / 2 m“ (höchstens 60 Zeichen) – Zuordnung ohne GTIN und MPN */
+  variantLabel?: string;
   title: string;
   /** Einkaufspreis netto je Stück in EUR */
   unitPrice: number;

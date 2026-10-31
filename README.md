@@ -34,14 +34,15 @@ Dashboard: <http://localhost:3000>
 
 | Befehl | Zweck |
 | --- | --- |
-| `npm run dev` | Entwicklungsserver mit Hot Reload |
-| `npm run build` / `npm start` | Produktions-Build lokal bauen und starten |
+| `npm run dev` | Entwicklungsserver mit Hot Reload (nur lokal, `127.0.0.1`) |
+| `npm run build` / `npm start` | Produktions-Build lokal bauen und starten – bricht vorher ab, wenn `.data/` echte Daten enthält (`scripts/check-public-data.ts`) |
 | `npm test` | Unit-Tests (Vitest) für Kalkulation, Lieferantenvergleich, Einkaufssperre und Sicherheitsgrenzen |
 | `npm run lint` | ESLint |
 | `npm run typecheck` | Routentypen erzeugen + TypeScript prüfen |
 | `npm run check` | Lint, Typecheck und Tests zusammen |
 | `npm run suppliers:import -- liste.csv` | Lieferanten-Preisliste (CSV) prüfen; Übernahme in den lokalen Speicher nur mit `--apply --confirm <CODE>` – siehe [docs/LIEFERANTEN-IMPORT.md](docs/LIEFERANTEN-IMPORT.md) |
-| `npm run market:scan -- --live --save` | Market Scout: Produktthemen finden (Wikipedia-Kategorien), öffentliches Interesse messen (Wikipedia-Aufrufe, kostenlos), Kandidaten durch Supplier Scout, Profit Check, Compliance und Shopify-Dry-Run führen; ohne `--live` nur Demo, ohne `--save` nichts speichern – siehe [docs/MARKET-SCOUT.md](docs/MARKET-SCOUT.md) |
+| `npm run market:scan` | Durchgängiger Dry-Run offline (Demo, Zielproduktkatalog, Preislisten, Nachweise, zwischengespeicherte Signale) durch Supplier Scout, Profit Controller, Compliance und Store Manager – schreibt nichts. `--save` speichert Stand (geschwärzt), Journal und Entwurfs-Artefakte unter `.data/market`; `--now <UTC>` simuliert (nur `.data/market/simulated`); `--strict`, `--run-id`; `--live` fragt zusätzlich Wikimedia ab (nur auf ausdrücklichen Start). Exit-Codes 0–5 – siehe [docs/MARKET-SCOUT.md](docs/MARKET-SCOUT.md) |
+| `npm run pipeline:dry-run` | = `market:scan -- --save` (offline; kein Shopify, kein Einkauf) |
 
 ## Bereiche
 

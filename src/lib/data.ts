@@ -18,6 +18,8 @@ import {
   DEMO_ADAPTERS,
   DEMO_QUERIES,
   demoQuotesFor,
+  isDemoGtin,
+  sameGtin,
   scoutSuppliers,
   toOfferEvaluations,
   type DemoProductId,
@@ -26,20 +28,24 @@ import {
   type SupplierComparison,
   type SupplierProductLink,
 } from "@/lib/suppliers";
-import { createPriceListAdapter, priceListQuotesFor, type ImportLogEntry } from "@/lib/suppliers/import";
+import { createPriceListAdapter, priceListQuotesFor, priceListVariantQuotes, type ImportLogEntry } from "@/lib/suppliers/import";
 import { loadEvidence, loadOfferStore } from "@/lib/suppliers/server/offer-store";
 import {
   assessRisk,
+  catalogVariantQueries,
   createDemoMarketSource,
   emptyMarketState,
   MARKET_SCAN,
   mergeRun,
   runMarketScan,
   type CandidateState,
+  type CatalogProduct,
   type EvaluationDeps,
+  type MarketSignal,
   type RunLogEntry,
   type StoredCandidate,
 } from "@/lib/market";
+import { loadCatalog } from "@/lib/market/server/catalog-store";
 import { isStopRequested, loadMarketState } from "@/lib/market/server/market-store";
 import type { DemoOrder, Product } from "@/lib/types";
 
@@ -88,7 +94,8 @@ export function getProductAnalyses(): ProductAnalysis[] {
   return DEMO_PRODUCTS.map((product) => {
     // Synchroner Vergleich über dieselben Angebote, die auch die Adapter liefern (Demo + importierte Preislisten).
     const query = supplierQueryFor(product.id);
-    const scout = compareQuotes(query, [...demoQuotesFor(product.id), ...priceListQuotesFor(imported.store, query, imported.evidence)]);
+    // Demo-Weg (allowReal: false): nur synthetische Preislistenzeilen – echte Zeilen erreichen Demo-Produkte nie.
+    const scout = compareQuotes(query, [...demoQuotesFor(product.id), ...priceListQuotesFor(imported.store, query, imported.evidence, { allowReal: false })]);
     const offers = toOfferEvaluations(scout);
     const best = offers.find((o) => o.isBest);
     const costs = offers.map((o) => o.landedCost).filter(Number.isFinite);
@@ -114,7 +121,7 @@ export function getProductAnalyses(): ProductAnalysis[] {
  */
 export async function getSupplierScoutReports(): Promise<{ product: Product; report: ScoutReport }[]> {
   const imported = importedSupplierData();
-  const adapters = [...DEMO_ADAPTERS, createPriceListAdapter(imported.store, imported.evidence)];
+  const adapters = [...DEMO_ADAPTERS, createPriceListAdapter(imported.store, imported.evidence, { allowReal: false })];
   return Promise.all(DEMO_PRODUCTS.map(async (product) => ({ product, report: await scoutSuppliers(supplierQueryFor(product.id), adapters) })));
 }
 
@@ -129,16 +136,26 @@ export interface SupplierImportStatus {
   errors: string[];
 }
 
-/** Stand der lokal importierten Preislisten für die Anzeige (ohne Preise oder Konditionen). */
-export function getSupplierImportStatus(): SupplierImportStatus {
+/**
+ * Stand der lokal importierten Preislisten für die Anzeige (ohne Preise oder Konditionen).
+ * Zuordnung getrennt nach Weg (Paket I): Synthetische Testdaten zählen als zugeordnet, wenn sie eine Demo-GTIN tragen;
+ * echte Zeilen nur über den lokalen Zielproduktkatalog (global eindeutige GTIN oder ausdrücklich genannter
+ * Angebots-Schlüssel einer Katalogvariante) – nie über Demo-GTINs. Gezählt wird nur, gelesen wird nichts weiter.
+ */
+export function getSupplierImportStatus(now: Date = new Date()): SupplierImportStatus {
   const { store, error } = loadOfferStore();
   const evidence = loadEvidence();
-  const gtins = new Set(Object.values(DEMO_QUERIES).map((q) => q.gtin));
   const offers = Object.values(store.offers);
+  const realOffers = offers.some((o) => o.provenance.synthetic !== true);
+  const variants = realOffers ? loadCatalog(now).products.flatMap((p) => p.variants) : [];
+  const assigned = (o: (typeof offers)[number]) =>
+    o.provenance.synthetic === true
+      ? isDemoGtin(o.data.gtin)
+      : variants.some((v) => (v.gtin !== undefined && sameGtin(v.gtin, o.data.gtin)) || (v.supplierOffers ?? []).includes(o.key));
   return {
     offers: offers.length,
     synthetic: offers.filter((o) => o.provenance.synthetic).length,
-    unassigned: offers.filter((o) => !o.data.gtin || !gtins.has(o.data.gtin)).length,
+    unassigned: offers.filter((o) => !assigned(o)).length,
     lastImport: store.imports.at(-1) ?? null,
     evidenceEntries: evidence.entries.length,
     errors: [...(error ? [error] : []), ...evidence.errors],
@@ -160,21 +177,40 @@ export type { DemoProductId };
 
 /**
  * Verbindet den Market Scout mit den vorhandenen Bausteinen: Supplier Scout (Demo-Angebote + importierte Preislisten),
- * Produktanalyse (für den Profit Check und den Shopify-Dry-Run) und Shopify-Listings. Keine eigene Logik.
+ * Demo-Zielpreise, Shop-Angaben für den Store Manager (Demo-Listings bzw. Katalogprodukte). Keine eigene Logik.
+ * - `catalog`: gültige Produkte des lokalen Zielproduktkatalogs (nur der Befehl `market:scan` lädt ihn, nie das Dashboard)
+ * - `cachedSignals`: zwischengespeicherte Nachfragesignale (ebenfalls nur `market:scan`)
+ *
+ * Getrennte Wege für Preislisten: Demo-Produkte bekommen nur synthetische Angebote (`allowReal: false`), echte
+ * Kandidaten nur echte (`allowReal: true`) – eine echte Preislistenzeile erreicht so nie ein Demo-Produkt.
  */
-export function marketEvaluationDeps(now: Date): EvaluationDeps {
+export function marketEvaluationDeps(now: Date, opts: { catalog?: readonly CatalogProduct[]; cachedSignals?: Map<string, MarketSignal[]> } = {}): EvaluationDeps {
   const imported = importedSupplierData();
-  const analyses = new Map(getProductAnalyses().map((a) => [a.product.id, a]));
   const queries = DEMO_QUERIES as Record<string, ProductQuery>;
+  const catalog = new Map((opts.catalog ?? []).map((p) => [p.id, p]));
   return {
     now,
     supplierInput(candidate) {
       if (candidate.productId && queries[candidate.productId]) {
+        // Ein echtes Thema, das nur mit einem Demo-Produkt verknüpft ist, hat keine echte Identität (Pipeline: IDENTITY_MISSING).
+        if (!candidate.demo) return null;
         const query = supplierQueryFor(candidate.productId);
-        return { query, quotes: [...demoQuotesFor(candidate.productId), ...priceListQuotesFor(imported.store, query, imported.evidence)] };
+        return { query, quotes: [...demoQuotesFor(candidate.productId), ...priceListQuotesFor(imported.store, query, imported.evidence, { allowReal: false })] };
+      }
+      // Katalogprodukt: je Variante Zuordnung über GTIN bzw. Artikelnummer + MPN/Variantenkennung (nur echte Angebote)
+      const product = !candidate.demo && candidate.catalogId ? catalog.get(candidate.catalogId) : undefined;
+      if (product) {
+        return {
+          variants: catalogVariantQueries(product).map(({ variant, query }) => ({
+            shopSku: variant.shopSku,
+            ...(variant.optionValue !== undefined && { optionValue: variant.optionValue }),
+            query,
+            ...priceListVariantQuotes(imported.store, query, imported.evidence, variant),
+          })),
+        };
       }
       // Ohne bekanntes Produkt nur mit GTIN – sonst kann der Supplier Scout Angebote nicht sicher zuordnen.
-      if (!candidate.gtin) return null;
+      if (candidate.demo || !candidate.gtin) return null;
       const query: ProductQuery = {
         productId: candidate.key,
         title: candidate.title,
@@ -183,11 +219,21 @@ export function marketEvaluationDeps(now: Date): EvaluationDeps {
         destinationCountry: "DE",
         safety: { ceRequired: assessRisk(candidate.title, candidate.category).level === "high" },
       };
-      return { query, quotes: priceListQuotesFor(imported.store, query, imported.evidence) };
+      return { query, quotes: priceListQuotesFor(imported.store, query, imported.evidence, { allowReal: true }) };
     },
+    // Nur Katalogprodukte haben einen echten Verkaufspreis (Planwert oder Marktbeobachtung); Demo nutzt den Zielpreis.
+    salePrice: (candidate) => (!candidate.demo && candidate.catalogId ? (catalog.get(candidate.catalogId)?.salePrice ?? null) : null),
     product: (id) => DEMO_PRODUCTS.find((p) => p.id === id),
-    analysis: (id) => analyses.get(id),
-    listing: (id) => DEMO_LISTINGS.find((l) => l.productId === id),
+    // Shop-Angaben für den Store Manager: Demo-Kandidaten das Demo-Listing, echte nur ihr Katalogprodukt (nie gemischt)
+    draftSource(candidate) {
+      if (candidate.demo) {
+        const demoListing = candidate.productId ? DEMO_LISTINGS.find((l) => l.productId === candidate.productId) : undefined;
+        return demoListing ? { demoListing } : null;
+      }
+      const product = candidate.catalogId ? catalog.get(candidate.catalogId) : undefined;
+      return product ? { catalog: product } : null;
+    },
+    cachedSignal: (key) => opts.cachedSignals?.get(key) ?? [],
   };
 }
 
@@ -203,7 +249,7 @@ export interface MarketScoutOverview {
   errors: string[];
 }
 
-const STATE_ORDER: CandidateState[] = ["draft_created", "approved", "blocked", "deferred", "unreviewed"];
+const STATE_ORDER: CandidateState[] = ["draft_created", "approved", "review_ready", "blocked", "deferred", "unreviewed"];
 
 /**
  * Stand des Market Scout für das Dashboard. Ohne gespeicherten Lauf: Vorschau mit der Demo-Quelle (gekennzeichnet).

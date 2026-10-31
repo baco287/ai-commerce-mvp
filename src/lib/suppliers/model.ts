@@ -51,10 +51,34 @@ export const EU_COUNTRIES: readonly CountryCode[] = [
   "MT", "NL", "PL", "PT", "RO", "SE", "SI", "SK",
 ];
 
+/**
+ * Feste Dokumenttypen für Pflichtunterlagen (Abgleich nur über den Typ, nie über Freitext).
+ * VORLÄUFIG: Die Zuordnung je Warengruppe muss fachlich bzw. rechtlich abgenommen werden (Entscheidung 2 des Inhabers).
+ */
+export const DOC_TYPES = [
+  "eu_doc",
+  "red_doc",
+  "weee",
+  "battg",
+  "gpsr",
+  "food_contact",
+  "cpnp",
+  "safety_assessment",
+  "magnet_warning",
+  "trademark_license",
+] as const;
+export type DocType = (typeof DOC_TYPES)[number];
+
 /** Was der Scout für ein Produkt sucht. Bestellmenge ist immer eine Kundenbestellung – kein Vorratskauf. */
 export interface ProductQuery {
-  /** Produkt-ID der Kontrollzentrale (z. B. "p-led") */
+  /** Produkt-ID der Kontrollzentrale (z. B. "p-led"; Katalogprodukte: "catalog:<id>") */
   productId: string;
+  /** Eindeutiger Schlüssel der Variante, z. B. "cat:<id>:<shopSku>" – Zuordnung von Nachweisen ohne GTIN */
+  productKey?: string;
+  /** Variantenkennung laut Lieferant (Katalogvariante ohne GTIN und ohne MPN) */
+  variantLabel?: string;
+  /** Pflicht-Dokumenttypen (Katalog bzw. Risikoregeln); ergänzt `safety.requiredDocuments` */
+  requiredDocTypes?: DocType[];
   title: string;
   /** EAN/GTIN – sicherste Zuordnung über Lieferanten hinweg */
   gtin?: string;
@@ -97,8 +121,13 @@ export interface ProductSafety {
   safetyInformationDe: Fact<boolean>;
   /** Bekannte Probleme, z. B. Rückruf, Behördenwarnung. Jeder Eintrag schließt das Angebot aus. */
   openIssues: string[];
-  /** Vorliegende Unterlagen, z. B. Konformitätserklärung, Prüfbericht – für die Compliance-Prüfung */
+  /** Vorliegende Unterlagen, z. B. Konformitätserklärung, Prüfbericht – nur zur Anzeige (Freitext) */
   documents: string[];
+  /**
+   * Typen der vorliegenden Unterlagen – EINZIGE Grundlage für den Abgleich mit Pflichtunterlagen (documents.ts).
+   * Freitext in `documents` erfüllt nie eine Pflicht. Fehlt das Feld, liegt keine typisierte Unterlage vor.
+   */
+  documentTypes?: DocType[];
 }
 
 /** Alle Beträge netto in EUR je Stück. */

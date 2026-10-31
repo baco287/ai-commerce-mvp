@@ -1,5 +1,6 @@
 import { ShieldAlert } from "lucide-react";
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import { Badge, DemoBadge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -15,6 +16,8 @@ import { RECOMMENDATION_LABEL } from "@/lib/labels";
 export const metadata: Metadata = { title: "Produktanalyse" };
 
 export default async function ProductsPage() {
+  // Dynamisch je Anfrage: Die Seite liest lokale Laufzeitdaten (.data/) – nie beim Build vorrendern (Paket I).
+  await connection();
   const analyses = getProductAnalyses();
   const market = await getMarketScoutOverview();
   const count = (r: Recommendation) => analyses.filter((a) => a.recommendation === r).length;

@@ -103,6 +103,7 @@ export function readRows(table: CsvTable, cols: ColumnResolution, mapping: Colum
     const gtin = read("gtin", parseGtin);
     const brand = read("brand", (r) => parseText(r, 80));
     const mpn = read("mpn", (r) => parseText(r, 80));
+    const variantLabel = read("variantLabel", (r) => parseText(r, 60));
     const shippingCostDe = read("shippingCostDe", parseMoney);
     const minOrderQuantity = read("minOrderQuantity", parseCount);
     const minOrderValue = read("minOrderValue", parseMoney);
@@ -156,6 +157,7 @@ export function readRows(table: CsvTable, cols: ColumnResolution, mapping: Colum
       ...(gtin !== undefined && { gtin }),
       ...(brand !== undefined && { brand }),
       ...(mpn !== undefined && { mpn }),
+      ...(variantLabel !== undefined && { variantLabel }),
       ...(shippingCostDe !== undefined && { shippingCostDe }),
       ...(minOrderQuantity !== undefined && { minOrderQuantity }),
       ...(minOrderValue !== undefined && { minOrderValue }),
