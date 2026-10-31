@@ -5,14 +5,27 @@
 import { RECOMMENDATION_RULES } from "@/lib/config/assumptions";
 import { demandScore } from "@/lib/calc/demand";
 import { calculateMargin, variableCosts, type MarginBreakdown } from "@/lib/calc/pricing";
-import { evaluateOffers, type OfferEvaluation } from "@/lib/calc/suppliers";
+import type { OfferEvaluation } from "@/lib/calc/suppliers";
 import { evaluateAutoPurchase, type PurchaseDecision } from "@/lib/guards/purchase";
 import { DEMO_AGENTS } from "@/lib/demo/agents";
 import { DEMO_ACTIVITIES, DEMO_ALERTS, DEMO_APPROVALS } from "@/lib/demo/events";
 import { DEMO_DAYS, DEMO_ORDERS, DEMO_TODAY } from "@/lib/demo/orders";
 import { DEMO_PRODUCTS } from "@/lib/demo/products";
-import { DEMO_OFFERS } from "@/lib/demo/suppliers";
-import { DEMO_ADAPTERS, DEMO_QUERIES, scoutSuppliers, type ProductQuery, type ScoutReport } from "@/lib/suppliers";
+import { DEMO_LISTINGS } from "@/lib/shopify/listings";
+import {
+  buildSupplierLinks,
+  compareQuotes,
+  DEMO_ADAPTERS,
+  DEMO_QUERIES,
+  demoQuotesFor,
+  scoutSuppliers,
+  toOfferEvaluations,
+  type DemoProductId,
+  type ProductQuery,
+  type ScoutReport,
+  type SupplierComparison,
+  type SupplierProductLink,
+} from "@/lib/suppliers";
 import type { DemoOrder, Product } from "@/lib/types";
 
 export type Recommendation = "kandidat" | "beobachten" | "verwerfen";
@@ -20,7 +33,11 @@ export type Recommendation = "kandidat" | "beobachten" | "verwerfen";
 export interface ProductAnalysis {
   product: Product;
   demand: number;
+  /** Ergebnis des Supplier Scouts – einzige Quelle für Lieferantenangebote und deren Eignung */
+  scout: SupplierComparison;
+  /** Dieselben Angebote im flachen Modell (aus `scout` abgeleitet), aufsteigend nach Gesamtkosten */
   offers: OfferEvaluation[];
+  /** Kalkulationsbasis: günstigster geeigneter Lieferant laut Scout */
   best?: OfferEvaluation;
   minCost: number;
   maxCost: number;
@@ -37,16 +54,26 @@ export function recommend(demand: number, margin?: MarginBreakdown): Recommendat
   return "verwerfen";
 }
 
+/** Scout-Suchanfrage eines Demo-Produkts. */
+export function supplierQueryFor(productId: string): ProductQuery {
+  const query = (DEMO_QUERIES as Record<string, ProductQuery>)[productId];
+  if (!query) throw new Error(`Keine Lieferanten-Suchanfrage für ${productId}`);
+  return query;
+}
+
 export function getProductAnalyses(): ProductAnalysis[] {
   return DEMO_PRODUCTS.map((product) => {
-    const offers = evaluateOffers(DEMO_OFFERS.filter((o) => o.productId === product.id));
+    // Synchroner Vergleich über dieselben Demo-Angebote, die auch die Demo-Adapter liefern.
+    const scout = compareQuotes(supplierQueryFor(product.id), demoQuotesFor(product.id));
+    const offers = toOfferEvaluations(scout);
     const best = offers.find((o) => o.isBest);
-    const costs = offers.map((o) => o.landedCost);
+    const costs = offers.map((o) => o.landedCost).filter(Number.isFinite);
     const demand = demandScore(product.signals);
     const margin = best ? calculateMargin(product.targetPriceGross, best.landedCost) : undefined;
     return {
       product,
       demand,
+      scout,
       offers,
       best,
       minCost: Math.min(...costs),
@@ -57,31 +84,28 @@ export function getProductAnalyses(): ProductAnalysis[] {
   });
 }
 
-export interface SupplierScoutItem {
-  product: Product;
-  /** null, wenn für das Produkt (noch) keine Lieferantensuche definiert ist */
-  report: ScoutReport | null;
-  /** Deckungsbeitrag je geeignetem Angebot (Schlüssel: Angebots-ID), gerechnet mit dem Zielpreis */
-  margins: Record<string, MarginBreakdown>;
-}
-
 /**
- * Supplier-Scout-Berichte für alle Produkte – reine Analyse. Empfehlungen geben nichts frei:
- * Hier wird weder die Einkaufssperre aufgerufen noch ein Zahlungsziel an sie übergeben.
+ * Vollständiger Scout-Lauf je Demo-Produkt über die Demo-Adapter (inkl. Adapter-Status).
+ * Kein Netzwerk, keine Kosten, keine Bestellungen.
  */
-export async function getSupplierScoutReports(): Promise<SupplierScoutItem[]> {
+export async function getSupplierScoutReports(): Promise<{ product: Product; report: ScoutReport }[]> {
   return Promise.all(
-    DEMO_PRODUCTS.map(async (product): Promise<SupplierScoutItem> => {
-      const query = DEMO_QUERIES[product.id] as ProductQuery | undefined;
-      if (!query) return { product, report: null, margins: {} };
-      const report = await scoutSuppliers(query, DEMO_ADAPTERS);
-      const margins = Object.fromEntries(
-        report.eligible.flatMap((e) => (e.cost ? [[e.quote.id, calculateMargin(product.targetPriceGross, e.cost.perUnit)]] : [])),
-      );
-      return { product, report, margins };
-    }),
+    DEMO_PRODUCTS.map(async (product) => ({ product, report: await scoutSuppliers(supplierQueryFor(product.id), DEMO_ADAPTERS) })),
   );
 }
+
+/** Kopplung Produkt ↔ Scout ↔ Shopify-Listing (Handle, Varianten, Angebots-ID der Kalkulationsbasis). */
+export function getSupplierLinks(): SupplierProductLink[] {
+  const analyses = getProductAnalyses();
+  return buildSupplierLinks({
+    products: DEMO_PRODUCTS,
+    queries: DEMO_QUERIES,
+    listings: DEMO_LISTINGS,
+    calculationBasis: Object.fromEntries(analyses.map((a) => [a.product.id, a.best?.offer.id])),
+  });
+}
+
+export type { DemoProductId };
 
 export interface OrderRow {
   order: DemoOrder;

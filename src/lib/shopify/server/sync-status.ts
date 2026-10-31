@@ -3,6 +3,7 @@
 
 import "server-only";
 import { getProductAnalyses } from "@/lib/data";
+import { ShopifyGuardError } from "../guards";
 import { summarizeInventory, type InventoryOverview } from "../inventory";
 import type { ProductSetInput } from "../product-input";
 import { reconcile, type ReconcileResult } from "../reconcile";
@@ -13,7 +14,7 @@ import { ShopifyConnectionError } from "./redact";
 import { readAllProducts, readInventory, readShopInfo, type ShopInfo } from "./read-products";
 import { loadSyncState, recordSync, successfulParts, type SyncOutcome, type SyncState } from "./sync-state";
 
-type ErrorKind = ShopifyConnectionError["kind"] | "unknown";
+type ErrorKind = ShopifyConnectionError["kind"] | "guard" | "unknown";
 
 /** Bestandsteil: läuft getrennt, damit der Produktabgleich auch ohne read_inventory sichtbar bleibt. */
 export type InventoryStatus =
@@ -51,6 +52,7 @@ export type ShopifySyncStatus =
 
 export function describeError(error: unknown): { kind: ErrorKind; message: string } {
   if (error instanceof ShopifyConnectionError) return { kind: error.kind, message: error.message };
+  if (error instanceof ShopifyGuardError) return { kind: "guard", message: `Von den Schutzregeln blockiert: ${error.reasons.join(" ")}` };
   // Unerwartete Fehler nicht im Wortlaut ausgeben oder protokollieren – sie könnten Interna enthalten.
   const type = error instanceof Error ? error.name : typeof error;
   return { kind: "unknown", message: `Unerwarteter Fehler bei der Shopify-Abfrage (${type}).` };

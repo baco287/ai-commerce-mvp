@@ -1,110 +1,109 @@
-import { Lock } from "lucide-react";
+import { Ban, Cable, Lock, ShieldAlert } from "lucide-react";
 import type { Metadata } from "next";
-import { ScoutRecommendations } from "@/components/suppliers/scout-recommendations";
-import { SupplierComparison, type SupplierComparisonItem } from "@/components/suppliers/supplier-comparison";
-import { DemoBadge } from "@/components/ui/badge";
+import { ProductSuppliers, ScoutOverview, StatusLegend } from "@/components/suppliers/supplier-scout";
+import { Badge, DemoBadge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
-import { calculateMargin } from "@/lib/calc/pricing";
-import { SUPPLIER_RULES } from "@/lib/config/assumptions";
-import { getProductAnalyses, getSupplierScoutReports } from "@/lib/data";
+import { SAFETY_SWITCHES } from "@/lib/config/budget";
+import { getSupplierLinks, getSupplierScoutReports } from "@/lib/data";
 import { formatRating } from "@/lib/format";
+import { buildSupplierView, SCOUT_RULES } from "@/lib/suppliers";
 
-export const metadata: Metadata = { title: "Lieferantenvergleich" };
-
-/** Zusätzliche harte Kriterien des Supplier Scouts (siehe src/lib/suppliers/eligibility.ts). */
-const SCOUT_CRITERIA = [
-  { title: "Produktidentität", rule: "GTIN oder exakter Abgleich bestätigt" },
-  { title: "Produktsicherheit", rule: "CE (falls nötig), EU-Verantwortliche, Hinweise DE bestätigt" },
-  { title: "Direktversand", rule: "Versand an Endkunden bestätigt" },
-  { title: "Kein Vorratskauf", rule: "Mindestabnahme höchstens Bestellmenge" },
-  { title: "Kosten", rule: "Einkauf, Versand und Import vollständig" },
-  { title: "Keine Sicherheitsprobleme", rule: "Kein Rückruf, keine Behördenwarnung" },
-];
+export const metadata: Metadata = { title: "Lieferanten – Supplier Scout" };
 
 export default async function SuppliersPage() {
-  const scout = await getSupplierScoutReports();
-  const items: SupplierComparisonItem[] = getProductAnalyses().map((a) => ({
-    productId: a.product.id,
-    productName: a.product.name,
-    priceGross: a.product.targetPriceGross,
-    offers: a.offers,
-    margins: a.offers.map((o) => {
-      const m = calculateMargin(a.product.targetPriceGross, o.landedCost);
-      return { contribution: m.contribution, marginPercent: m.marginPercent };
-    }),
-  }));
-  const totalOffers = items.reduce((s, i) => s + i.offers.length, 0);
+  const reports = await getSupplierScoutReports();
+  const views = reports.map(({ product, report }) =>
+    buildSupplierView(product, report, { adapters: report.adapters, containsDemoData: report.containsDemoData }),
+  );
+  const links = new Map(getSupplierLinks().map((l) => [l.productId, l]));
+  const totalOffers = views.reduce((s, v) => s + v.eligible.length + v.excluded.length, 0);
+  const adapters = reports[0]?.report.adapters ?? [];
 
   return (
     <>
       <PageHeader
-        title="Lieferantenvergleich"
-        description={`${totalOffers} simulierte Angebote für ${items.length} Produkte – verglichen nach Einkauf, Versand, Importkosten und Lieferzeit. Markiert wird das günstigste Angebot, das alle Mindestanforderungen erfüllt.`}
+        title="Lieferanten (Supplier Scout)"
+        description={`${totalOffers} Angebote fiktiver Lieferanten für ${views.length} Produkte – geprüft auf Produktidentität, Sicherheit, Dropshipping, Lieferfähigkeit und Finanzierung. Je Produkt: günstigster, schnellster und insgesamt bester geeigneter Lieferant.`}
+        actions={<DemoBadge label="Fiktive Lieferanten" />}
       />
 
-      <div className="mb-4 grid gap-4 lg:grid-cols-3">
-        <Card title="Mindestanforderungen" description="Sonst gilt ein Angebot als „nicht geeignet“" className="lg:col-span-2">
-          <ul className="grid gap-3 text-sm sm:grid-cols-3">
-            <li className="rounded-lg border border-line bg-surface-2/50 p-3">
-              <p className="text-xs text-subtle">Lieferzeit</p>
-              <p className="mt-0.5 font-medium">max. {SUPPLIER_RULES.maxDeliveryDays} Tage</p>
+      <section
+        aria-label="Sicherheitshinweis"
+        className="mb-4 flex gap-3 rounded-xl border border-amber-400/30 bg-amber-400/5 px-4 py-3 text-sm text-amber-100"
+      >
+        <ShieldAlert className="mt-0.5 size-5 shrink-0 text-amber-300" aria-hidden />
+        <div className="min-w-0">
+          <p className="font-semibold">Empfehlung ist keine Einkaufsfreigabe</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-amber-100/90">
+            <li>Alle Lieferanten und Werte sind Demo-Daten – keine echten Firmen, Preise oder Konditionen.</li>
+            <li>
+              Es gibt hier keine Bestellungen. Automatischer Einkauf ist gesperrt
+              {SAFETY_SWITCHES.autoPurchaseEnabled ? "" : " (Sicherheitsschalter aus)"}; Demo-Angebote gelten für die
+              Einkaufssperre immer als Vorkasse.
             </li>
-            <li className="rounded-lg border border-line bg-surface-2/50 p-3">
-              <p className="text-xs text-subtle">Bewertung</p>
-              <p className="mt-0.5 font-medium">min. {formatRating(SUPPLIER_RULES.minRating)} von 5</p>
-            </li>
-            <li className="rounded-lg border border-line bg-surface-2/50 p-3">
-              <p className="text-xs text-subtle">Lagerbestand</p>
-              <p className="mt-0.5 font-medium">min. {SUPPLIER_RULES.minStock} Stück</p>
-            </li>
+            <li>Shopify wird von dieser Seite weder gelesen noch geändert – keine Preise, keine Veröffentlichung.</li>
+            <li>Vor jeder Freigabe: fehlende Nachweise, unbestätigte Angaben und die Finanzierung klären.</li>
           </ul>
-          <p className="mb-2 mt-4 text-xs font-medium text-muted">Zusätzlich im Supplier Scout</p>
-          <ul className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-3">
-            {SCOUT_CRITERIA.map((c) => (
-              <li key={c.title} className="rounded-lg border border-line bg-surface-2/50 p-3">
-                <p className="text-xs text-subtle">{c.title}</p>
-                <p className="mt-0.5 font-medium">{c.rule}</p>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-3 text-xs text-muted">
-            Fehlende oder nur behauptete Angaben schließen bei diesen Punkten aus. Vorkasse und unklare Zahlungsziele schließen nicht
-            aus, werden aber als Vorfinanzierung markiert.
-          </p>
-        </Card>
-        <Card>
-          <div className="flex items-start gap-3">
-            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-amber-400/10 text-amber-300 ring-1 ring-amber-400/25">
-              <Lock className="size-4" aria-hidden />
-            </span>
-            <div>
-              <p className="text-sm font-semibold">Keine automatischen Bestellungen</p>
-              <p className="mt-1 text-xs leading-relaxed text-muted">
-                Der Vergleich ist reine Analyse. Echtgeld-Bestellungen und Musterkäufe sind gesperrt, bis Finanzierung und Freigabeprozess stehen.
-              </p>
-            </div>
-          </div>
-        </Card>
+        </div>
+      </section>
+
+      <div className="mb-4">
+        <ScoutOverview views={views} />
       </div>
 
-      <Card
-        title="Supplier Scout – Empfehlungen"
-        description="Prüft zusätzlich Produktidentität, CE/GPSR, Direktversand, Vorratskauf und Vorfinanzierung. Empfehlungen geben nichts frei."
-        action={<DemoBadge label="Fiktive Lieferanten" />}
-        className="mb-4"
-        flush
-      >
-        <ScoutRecommendations items={scout} />
+      <Card className="mb-4" title="So wird geprüft" description="Gleiche Mindestanforderungen wie in der Produktanalyse">
+        <div className="space-y-3 text-xs text-muted">
+          <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <li className="rounded-lg border border-line bg-surface-2/50 p-2.5">
+              Lieferzeit nach DE <span className="font-medium text-fg">max. {SCOUT_RULES.maxDeliveryDays} Tage</span>
+            </li>
+            <li className="rounded-lg border border-line bg-surface-2/50 p-2.5">
+              Bewertung <span className="font-medium text-fg">min. {formatRating(SCOUT_RULES.minRating)}</span>
+            </li>
+            <li className="rounded-lg border border-line bg-surface-2/50 p-2.5">
+              Lieferantenbestand <span className="font-medium text-fg">min. {SCOUT_RULES.minStock} Stück</span>
+            </li>
+            <li className="rounded-lg border border-line bg-surface-2/50 p-2.5">
+              Auszahlung an uns nach <span className="font-medium text-fg">{SCOUT_RULES.payoutDelayDays} Tagen</span>
+            </li>
+          </ul>
+          <p>
+            Ausgeschlossen werden Angebote mit unklarer Produktidentität, fehlender CE-/GPSR-Absicherung, ohne bestätigten Direktversand, ohne
+            Lieferfähigkeit oder mit Mindestabnahme über einer Kundenbestellung. <span className="text-fg">Kalkulationsbasis</span> für Marge und
+            Shopify „Kosten pro Artikel“ ist der günstigste geeignete Lieferant.
+          </p>
+          <StatusLegend />
+        </div>
       </Card>
 
-      <Card
-        title="Angebote je Produkt"
-        description="Bisheriger Vergleich nach Mindestanforderungen – wird nach der Umstellung auf den Supplier Scout ersetzt."
-        action={<DemoBadge label="Fiktive Lieferanten" />}
-        flush
-      >
-        <SupplierComparison items={items} />
+      <div className="space-y-4">
+        {views.map((v) => (
+          <ProductSuppliers key={v.productId} view={v} link={links.get(v.productId)} />
+        ))}
+      </div>
+
+      <Card className="mt-4" title="Datenquellen" description="Schnittstelle für spätere echte Lieferanten (docs/SUPPLIER-AGENT.md)">
+        <ul className="space-y-2 text-xs">
+          {adapters.map((a) => (
+            <li key={a.adapterId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line px-3 py-2">
+              <span className="flex items-center gap-1.5 text-fg">
+                <Cable className="size-3.5 text-subtle" aria-hidden /> {a.adapterName}
+              </span>
+              <Badge tone={a.status === "ok" ? "green" : a.status === "blocked" ? "amber" : "red"}>
+                {a.status === "ok" ? "Demo-Quelle aktiv" : a.status === "blocked" ? "gesperrt" : "Fehler"}
+              </Badge>
+            </li>
+          ))}
+          <li className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed border-line px-3 py-2 text-muted">
+            <span className="flex items-center gap-1.5">
+              <Ban className="size-3.5" aria-hidden /> Echte Lieferanten-APIs (kostenpflichtig oder mit Netzwerkzugriff)
+            </span>
+            <Badge tone="amber">
+              <Lock className="size-3" aria-hidden /> gesperrt
+            </Badge>
+          </li>
+        </ul>
       </Card>
     </>
   );

@@ -26,7 +26,7 @@ src/
   app/                    Seiten (App Router)
     page.tsx              Dashboard
     produkte/             Produktanalyse
-    lieferanten/          Lieferantenvergleich
+    lieferanten/          Supplier Scout: Empfehlungen, Nachweise, Finanzierung
     agenten/              KI-Agenten
     freigaben/            Freigaben & Budget
   components/
@@ -52,8 +52,10 @@ angebunden werden, ändert sich nur diese Schicht, nicht die Oberfläche.
 - **Nachfrage (0–100):** gewichteter Mix aus Suchtrend (35 %), Social Buzz (25 %), geringem
   Wettbewerb (25 %) und Saison (15 %).
 - **Gesamtkosten eines Angebots:** Einkauf + Versand + geschätzte Importkosten.
-- **Geeigneter Lieferant:** Lieferzeit ≤ 12 Tage, Bewertung ≥ 4,2, Bestand ≥ 50. Markiert wird das
-  günstigste Angebot, das alle Regeln erfüllt – nicht einfach das billigste.
+- **Geeigneter Lieferant (Supplier Scout):** Lieferzeit ≤ 12 Tage, Bewertung ≥ 4,2, Bestand ≥ 50 – und zusätzlich
+  bestätigte Produktidentität, CE/GPSR-Absicherung, bestätigter Direktversand, Lieferfähigkeit nach DE und keine
+  Mindestabnahme über einer Kundenbestellung. Kalkulationsbasis ist das günstigste Angebot, das alle Regeln
+  erfüllt – nicht einfach das billigste.
 - **Deckungsbeitrag:** Nettopreis − Warenkosten − Zahlungsgebühr − Werbekosten je Verkauf −
   Retourenreserve. Die Annahmen stehen in `src/lib/config/assumptions.ts` und sind Platzhalter.
 - **Empfehlung:** Kandidat (Marge ≥ 20 % und Nachfrage ≥ 65), Beobachten (Marge ≥ 10 %), sonst Verwerfen.
@@ -66,8 +68,9 @@ unklarer Produktsicherheit (CE, GPSR), ohne bestätigten Direktversand oder mit 
 kennzeichnet Vorfinanzierung und empfiehlt den günstigsten, schnellsten und insgesamt besten
 geeigneten Lieferanten mit Begründung. Details: [SUPPLIER-AGENT.md](SUPPLIER-AGENT.md).
 
-- **Übergangsphase:** Dashboard und Shopify-Pipeline nutzen noch das alte Modell
-  (`SupplierOffer`, `calc/suppliers.ts`, `demo/suppliers.ts`). Die Umstellung folgt schrittweise.
+- **Eine Quelle, eine Logik:** Produktanalyse, Seite `/lieferanten`, Bestellübersicht und Shopify-Pipeline nutzen den
+  Scout. Das alte flache Modell (`SupplierOffer`/`OfferEvaluation`) wird daraus abgeleitet (`suppliers/legacy.ts`).
+  Kalkulationsbasis ist der günstigste geeignete Lieferant.
 - **Einkaufssperre:** Ein Zahlungsziel aus dem Scout wird über `toPurchaseGuardTerms`
   (`suppliers/purchase-bridge.ts`) übergeben. Demo-Angebote, ausgeschlossene Angebote (z. B. unklare
   CE-/GPSR-Angaben) sowie unbestätigte, ungültige oder an eine Gewerbeprüfung geknüpfte Zahlungsziele
@@ -97,7 +100,8 @@ im Dev-Server) und werden als fertiges HTML ausgeliefert; der Browser rechnet ni
 | --- | --- | --- |
 | Nachfragebewertung 0–100 | `src/lib/calc/demand.ts` | ja |
 | Gesamtkosten- und Deckungsbeitragsrechnung | `src/lib/calc/pricing.ts` | ja |
-| Lieferanten-Eignung und „günstigster geeigneter“ | `src/lib/calc/suppliers.ts` | ja |
+| Lieferanten-Eignung, Empfehlungen, Finanzierung | `src/lib/suppliers/` (Supplier Scout; `legacy.ts` leitet das flache Modell ab) | ja |
+| Ältere, flache Eignungsprüfung (`evaluateOffers`) | `src/lib/calc/suppliers.ts` – nur noch Typ `OfferEvaluation` in Gebrauch, Logik nur in Tests | ja |
 | Produktempfehlung (Kandidat/Beobachten/Verwerfen) | `src/lib/data.ts` | indirekt |
 | Einkaufssperre je Bestellung | `src/lib/guards/purchase.ts` | ja |
 | Sicherheitsschalter (zur Laufzeit eingefroren) | `src/lib/config/budget.ts` | ja |
@@ -113,7 +117,7 @@ Die **Logik** ist echt – die **Eingangsdaten** sind es nicht (siehe unten).
 | Bereich | Details |
 | --- | --- |
 | Produkte, Nachfragesignale | fiktiv, `src/lib/demo/products.ts` |
-| Lieferanten und Angebote | fiktive Firmen mit „(Demo)“, `src/lib/demo/suppliers.ts` und `src/lib/suppliers/demo/` |
+| Lieferanten und Angebote | fiktive Firmen mit „(Demo)“, `src/lib/suppliers/demo/demo-suppliers.ts` |
 | Bestellungen, Umsätze, Zahlungsstatus | deterministisch erzeugt (fester Seed), `src/lib/demo/orders.ts` |
 | Agentenläufe, Aktivitäten, Warnungen, Freigabeanfragen | statische Demodaten, keine KI-API-Aufrufe |
 | Kalkulationsannahmen | Platzhalter (Zahlungsgebühr, Werbekosten, Retouren, Auszahlungsdauer) |
@@ -124,7 +128,7 @@ Die **Logik** ist echt – die **Eingangsdaten** sind es nicht (siehe unten).
 | --- | --- |
 | Agent pausieren/fortsetzen | ändert nur die Anzeige, wird nicht gespeichert, löst nichts aus |
 | Freigeben/Ablehnen | ändert nur die Anzeige; Anfragen mit Echtgeld-Bezug sind gesperrt |
-| „Bestellen“ im Lieferantenvergleich | deaktiviert |
+| Lieferanten-Seite `/lieferanten` | reine Anzeige – keine Bestell-, Kauf- oder Freigabe-Knöpfe |
 
 ### Nicht vorhanden
 

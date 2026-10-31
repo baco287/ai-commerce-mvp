@@ -41,8 +41,10 @@ export interface ShopifyProduct {
   vendor: string;
   productType: string;
   tags: string[];
-  /** Hauptbild; null = kein Bild */
+  /** Hauptbild; null = kein Bild (oder noch in Verarbeitung) */
   featuredMedia: { id: string } | null;
+  /** Mindestens ein Medium vorhanden, auch wenn Shopify es noch verarbeitet; undefined = nicht gelesen */
+  hasMedia?: boolean;
   variants: {
     id: string;
     title: string;
@@ -79,6 +81,13 @@ export const isDemoLike = (p: ShopifyProduct) =>
   p.handle.startsWith(DEMO_MARKERS.handlePrefix) ||
   p.variants.some((v) => v.sku?.startsWith(DEMO_MARKERS.skuPrefix));
 
+/** Anzahl Varianten je SKU (leere SKU = ""). */
+export function countSkus(product: ShopifyProduct): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const v of product.variants) counts.set(v.sku ?? "", (counts.get(v.sku ?? "") ?? 0) + 1);
+  return counts;
+}
+
 export interface ReconcileOptions {
   /**
    * Bestand wurde gelesen (read_inventory vorhanden, Abfrage erfolgreich). Dann gilt eine Variante
@@ -99,10 +108,17 @@ function compareProduct(expected: ProductSetInput, actual: ShopifyProduct, optio
   add("Hersteller", expected.vendor, actual.vendor);
   add("Produkttyp", expected.productType, actual.productType);
 
-  if (expected.files.length > 0) add("Produktbild", "vorhanden", actual.featuredMedia ? "vorhanden" : "fehlt");
+  if (expected.files.length > 0) {
+    add("Produktbild", "vorhanden", actual.featuredMedia ? "vorhanden" : actual.hasMedia ? "wird verarbeitet" : "fehlt");
+  }
 
   const missingTags = expected.tags.filter((t) => !actual.tags.includes(t));
   if (missingTags.length) diffs.push({ field: "Tags", expected: expected.tags.join(", "), actual: actual.tags.join(", ") || "–" });
+
+  // Doppelte SKUs offen melden – sonst würde die Zuordnung unten eine Variante still überdecken.
+  for (const [sku, count] of countSkus(actual)) {
+    if (sku && count > 1) diffs.push({ field: `Doppelte SKU ${sku}`, expected: "eindeutig", actual: `${count} Varianten` });
+  }
 
   const actualBySku = new Map(actual.variants.map((v) => [v.sku ?? "", v]));
   for (const ev of expected.variants) {
@@ -133,17 +149,24 @@ function compareProduct(expected: ProductSetInput, actual: ShopifyProduct, optio
   return diffs;
 }
 
+/** Findet das Shopify-Produkt zu einem Soll-Produkt: über das URL-Handle, ersatzweise über eine SKU. */
+export function findShopifyProduct(
+  expected: ProductSetInput,
+  shopify: ShopifyProduct[],
+): { product: ShopifyProduct; matchedBy: "handle" | "sku" } | undefined {
+  const byHandle = shopify.find((p) => p.handle === expected.handle);
+  if (byHandle) return { product: byHandle, matchedBy: "handle" };
+  const skus = new Set(expected.variants.map((v) => v.inventoryItem.sku));
+  const bySku = shopify.find((p) => p.variants.some((v) => v.sku && skus.has(v.sku)));
+  return bySku ? { product: bySku, matchedBy: "sku" } : undefined;
+}
+
 export function reconcile(expected: ProductSetInput[], shopify: ShopifyProduct[], options: ReconcileOptions = {}): ReconcileResult {
   const used = new Set<string>();
   const rows: ReconcileRow[] = expected.map((exp) => {
-    const skus = new Set(exp.variants.map((v) => v.inventoryItem.sku));
-    let matchedBy: "handle" | "sku" = "handle";
-    let found = shopify.find((p) => p.handle === exp.handle);
-    if (!found) {
-      found = shopify.find((p) => p.variants.some((v) => v.sku && skus.has(v.sku)));
-      matchedBy = "sku";
-    }
-    if (!found) return { kind: "missing", handle: exp.handle, title: exp.title, expected: exp };
+    const match = findShopifyProduct(exp, shopify);
+    if (!match) return { kind: "missing", handle: exp.handle, title: exp.title, expected: exp };
+    const { product: found, matchedBy } = match;
     used.add(found.id);
     const diffs = compareProduct(exp, found, options);
     return { kind: diffs.length ? "drift" : "match", handle: exp.handle, title: found.title, matchedBy, shopifyId: found.id, diffs };

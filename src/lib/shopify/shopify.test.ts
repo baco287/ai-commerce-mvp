@@ -83,19 +83,18 @@ describe("Shopify-Abgleich", () => {
     expect(transport.calls[0].variables).toMatchObject({ identifier: { handle: "demo-led-lichtleiste" } });
   });
 
-  it("verweigert echte Schreibzugriffe, solange der Sicherheitsschalter aus ist", async () => {
+  it("schreibt über diesen Weg nie echt – auch nicht bei eingeschaltetem Schreibzugriff", async () => {
     let sent = 0;
     const live: ShopifyAdminTransport = { dryRun: false, execute: async () => ++sent };
-    await expect(syncProducts(planned(), live)).rejects.toThrow(/deaktiviert/);
+    await expect(syncProducts(planned(), live)).rejects.toThrow(/nur ein Dry-Run/);
     expect(sent).toBe(0);
   });
 
-  it("prüft Guards auch bei eingeschaltetem Schreibzugriff vor jedem Aufruf", async () => {
-    let sent = 0;
-    const live: ShopifyAdminTransport = { dryRun: false, execute: async () => ++sent };
+  it("prüft Guards vor jedem Aufruf, auch im Dry-Run", async () => {
+    const transport = new DryRunTransport();
     const [first] = planned();
     const active = { ...first, input: { ...first.input, status: "ACTIVE" as const } };
-    await expect(syncProducts([active], live, { writeEnabled: true })).rejects.toThrow(ShopifyGuardError);
-    expect(sent).toBe(0);
+    await expect(syncProducts([active], transport)).rejects.toThrow(ShopifyGuardError);
+    expect(transport.calls).toHaveLength(0);
   });
 });

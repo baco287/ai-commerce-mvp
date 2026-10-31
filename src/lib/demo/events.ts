@@ -5,7 +5,7 @@ import type { ActivityEvent, ApprovalRequest, SystemAlert } from "@/lib/types";
 export const DEMO_ACTIVITIES: ActivityEvent[] = [
   { id: "a1", at: "2026-10-19T08:30:00Z", agentId: "order-fulfillment", kind: "blocked", message: "Einkauf für neue Demo-Bestellungen blockiert – Sicherheitsschalter aus." },
   { id: "a2", at: "2026-10-19T08:12:00Z", agentId: "profit-calculator", kind: "calculation", message: "Margen für 5 Produkte neu berechnet (Werbekosten-Annahme 6 € je Verkauf)." },
-  { id: "a3", at: "2026-10-19T08:10:00Z", agentId: "supplier-scout", kind: "analysis", message: "16 Demo-Angebote bewertet, 6 erfüllen die Mindestanforderungen nicht." },
+  { id: "a3", at: "2026-10-19T08:10:00Z", agentId: "supplier-scout", kind: "analysis", message: "20 Demo-Angebote bewertet, 10 erfüllen die Mindestanforderungen nicht." },
   { id: "a4", at: "2026-10-19T07:45:00Z", agentId: "market-research", kind: "analysis", message: "Trendsignale aktualisiert: Trinkflasche und LED-Lichtleiste mit hoher Nachfrage." },
   { id: "a5", at: "2026-10-19T07:00:00Z", agentId: "system", kind: "system", message: "Tagesstart: Demo-Modus aktiv, alle Echtgeld-Aktionen deaktiviert." },
   { id: "a6", at: "2026-10-18T16:05:00Z", agentId: "ads-manager", kind: "blocked", message: "Kampagnenentwurf erstellt, Start blockiert – echte Anzeigen deaktiviert." },

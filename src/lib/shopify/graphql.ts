@@ -28,6 +28,81 @@ export const PRODUCT_SET_MUTATION = /* GraphQL */ `
   }
 `;
 
+// ---------------------------------------------------------------------------------------------
+// Schreib-Operationen (freigegeben am 31.10.2026: write_products + write_inventory, nur Entwürfe).
+// Gesendet werden ausschließlich diese festen Dokumente über den abgesicherten Schreib-Client
+// (Schreib-Client in server/admin-client.ts). Variablen prüft write-operations.ts.
+// ---------------------------------------------------------------------------------------------
+
+/** Schaltet die Bestandsverfolgung eines Lagerartikels ein. `tracked: true` steht fest im Dokument. */
+export const TRACK_INVENTORY_MUTATION = /* GraphQL */ `
+  mutation AiCommerceTrackInventory($id: ID!) {
+    inventoryItemUpdate(id: $id, input: { tracked: true }) {
+      inventoryItem {
+        id
+        tracked
+      }
+      userErrors {
+        message
+      }
+    }
+  }
+`;
+
+/** Fügt einem bestehenden Produkt ein Bild hinzu (bestehende Medien bleiben). */
+export const ADD_PRODUCT_IMAGE_MUTATION = /* GraphQL */ `
+  mutation AiCommerceAddProductImage($product: ProductUpdateInput!, $media: [CreateMediaInput!]) {
+    productUpdate(product: $product, media: $media) {
+      product {
+        id
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
+/**
+ * Setzt den verfügbaren Bestand an einem Standort. Nur für Demo-Produkte und nur auf 0 erlaubt.
+ * Seit 2026-04 mit Pflicht-Idempotenzschlüssel; `changeFromQuantity` verhindert Überschreiben
+ * eines zwischenzeitlich geänderten Bestands.
+ */
+export const ZERO_DEMO_STOCK_MUTATION = /* GraphQL */ `
+  mutation AiCommerceZeroDemoStock($input: InventorySetQuantitiesInput!, $idempotencyKey: String!) {
+    inventorySetQuantities(input: $input) @idempotent(key: $idempotencyKey) {
+      inventoryAdjustmentGroup {
+        id
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
+/**
+ * Legt ein fehlendes Produkt als Entwurf neu an. Bewusst OHNE identifier: productSet würde bei
+ * bestehenden Produkten nicht mitgesendete Listen-Einträge (z. B. Metafelder) löschen.
+ */
+export const CREATE_DRAFT_PRODUCT_MUTATION = /* GraphQL */ `
+  mutation AiCommerceCreateDraftProduct($input: ProductSetInput!) {
+    productSet(synchronous: true, input: $input) {
+      product {
+        id
+        handle
+        status
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
 /** Verbindungstest: Store-Name, Währung und die tatsächlich erteilten App-Rechte. */
 export const SHOP_INFO_QUERY = /* GraphQL */ `
   query AiCommerceShopInfo {
@@ -110,6 +185,11 @@ export const PRODUCTS_QUERY = /* GraphQL */ `
         tags
         featuredMedia {
           id
+        }
+        media(first: 1) {
+          nodes {
+            id
+          }
         }
         variants(first: 100) {
           pageInfo {

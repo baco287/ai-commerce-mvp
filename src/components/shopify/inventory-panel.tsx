@@ -82,8 +82,8 @@ function InventoryDetails({ overview }: { overview: Extract<InventoryStatus, { s
             Weiterverkauf erlaubt ist). Solange die Produkte <strong>Entwurf</strong> sind, sind sie im Shop trotzdem nicht kaufbar.
           </span>
           <span className="mt-1 block text-muted">
-            Beheben im Shopify-Admin: Produkt → Variante → „Inventar verfolgen“ aktivieren, Menge 0 – oder die Import-Datei mit „Vorhandene Produkte
-            überschreiben“ erneut importieren.
+            Automatisch beheben: <code className="font-mono">npm run shopify:sync</code> (Testlauf), dann{" "}
+            <code className="font-mono">npm run shopify:sync -- --apply</code> – schaltet die Verfolgung ein und setzt Demo-Bestand auf 0.
           </span>
         </Hint>
       )}

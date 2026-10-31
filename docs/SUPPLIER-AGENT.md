@@ -31,7 +31,10 @@ veröffentlicht nichts in Shopify. Einkäufe laufen später ausschließlich übe
 | `src/lib/suppliers/scout.ts` | Ablauf über mehrere Adapter (`scoutSuppliers`) |
 | `src/lib/suppliers/purchase-bridge.ts` | Konservative Übergabe des Zahlungsziels an die Einkaufssperre |
 | `src/lib/suppliers/quote-builder.ts` | Baukasten für Demo-Daten und Tests |
-| `src/lib/suppliers/demo/demo-suppliers.ts` | Fiktive Demo-Lieferanten für alle 5 Produkte in zwei Demo-Adaptern (Kernzahlen aus `src/lib/demo/suppliers.ts`) |
+| `src/lib/suppliers/demo/demo-suppliers.ts` | Fiktive Demo-Lieferanten für alle 5 Produkte in zwei Demo-Adaptern – **einzige** Quelle für Lieferantenangebote |
+| `src/lib/suppliers/dashboard.ts` | Aufbereitung für die Seite `/lieferanten`: Empfehlungen, Marge, Status je Angabe, Warn-Kennzeichen |
+| `src/lib/suppliers/legacy.ts` | Leitet das alte flache Modell (`OfferEvaluation`) aus dem Scout ab – für Produktanalyse, Bestellungen, Shopify-Pipeline |
+| `src/lib/suppliers/links.ts` | Kopplung Produkt ↔ Scout ↔ Shopify-Listing (GTIN, Handle, Varianten-SKUs, Angebots-ID) |
 | `src/lib/suppliers/index.ts` | Öffentliche Schnittstelle |
 | `src/lib/suppliers/*.test.ts` | Automatisierte Tests |
 
@@ -54,28 +57,14 @@ ProductQuery ──► scoutSuppliers(query, adapters)
 import { scoutSuppliers, DEMO_ADAPTERS, DEMO_QUERIES } from "@/lib/suppliers";
 
 const report = await scoutSuppliers(DEMO_QUERIES["p-led"], DEMO_ADAPTERS);
-const best = report.recommendations.best;
-best?.supplierName;          // "Lumio Großhandel (Demo)"
-best?.approval;              // immer "none" – eine Empfehlung ist nie eine Einkaufsfreigabe
-best?.requiresPrefinancing;  // false (bestätigtes Zahlungsziel 14 Tage)
-best?.openPoints;            // offene Punkte als { code, message }[]
-best?.reasons;               // Begründung, ein Satz je Eintrag
+report.recommendations.best?.supplierName; // "EuroLight Fulfillment (Demo)"
+report.recommendations.best?.reasons;      // Begründung, ein Satz je Eintrag
+report.recommendations.best?.approval;     // immer "none" – eine Empfehlung ist nie eine Einkaufsfreigabe
 ```
 
-### Felder einer Empfehlung (`Recommendation`)
-
-| Feld | Bedeutung |
-| --- | --- |
-| `kind` | `cheapest`, `fastest` oder `best` |
-| `quoteId`, `supplierName` | Welches Angebot empfohlen wird |
-| `approval` | Immer `"none"`. Eine Empfehlung gibt nichts frei; Einkäufe laufen nur über die Einkaufssperre. |
-| `demo` | Angebot stammt aus fiktiven Demo-Daten |
-| `requiresPrefinancing`, `financingStatus` | Ergebnis der Finanzierungsprüfung (siehe unten) |
-| `openPoints` | Offene Punkte (fehlende oder unbestätigte Angaben) als `{ code, message }` |
-| `perUnit`, `deliveryDays`, `score` | Gesamtkosten je Stück, Lieferzeit, Gesamtbewertung 0–100 |
-| `reasons` | Begründung als Sätze für Menschen |
-
-Die Oberfläche soll Abzeichen aus den strukturierten Feldern bauen, nicht aus den Begründungstexten.
+Neben `kind`, `quoteId`, `supplierName` und `reasons` enthält jede Empfehlung strukturierte Felder, damit
+Aufrufer keine Begründungstexte auswerten müssen: `approval` (immer `"none"`), `demo`, `requiresPrefinancing`,
+`financingStatus`, `openPoints` (offene Punkte als `{ code, message }`), `perUnit`, `deliveryDays` und `score`.
 
 ## Fehlende und unbestätigte Angaben
 
@@ -99,7 +88,7 @@ Ein Angebot wird ausgeschlossen – und nie empfohlen –, wenn einer dieser Pun
 | `identity_mismatch` | GTIN weicht vom gesuchten Produkt ab, oder Lieferant führt bestätigt ein anderes Produkt |
 | `identity_unconfirmed` | Weder bestätigte GTIN noch bestätigter exakter Abgleich (z. B. nur „ähnliche Variante") |
 | `safety_issue` | Bekanntes Sicherheitsproblem (Rückruf, Behördenwarnung) |
-| `safety_unclear` | CE-Kennzeichnung (falls nötig), verantwortliche Person in der EU (GPSR) oder deutsche Sicherheitshinweise nicht bestätigt |
+| `safety_unclear` | CE-Kennzeichnung (falls nötig), verantwortliche Person in der EU (GPSR; eine leere Angabe zählt nicht) oder deutsche Sicherheitshinweise nicht bestätigt |
 | `dropshipping_unavailable` | Direktversand an Endkunden nicht bestätigt |
 | `not_deliverable` | Keine Lieferung nach DE, Bestand unbekannt oder kleiner als die Bestellmenge, Lieferzeit unbekannt |
 | `insufficient_stock` | Bestand unter `minStock` (50) |
@@ -178,31 +167,21 @@ Gleiche Eingabe ergibt immer dieselbe Empfehlung – unabhängig von der Reihenf
 
 | Lieferant | Gesamtkosten | Lieferzeit | Zahlung | Punkte | Ergebnis |
 | --- | --- | --- | --- | --- | --- |
-| Lumio Großhandel (Demo), DE | 13,80 € | 2–3 Tage | 14 Tage Ziel | 89,7 | **insgesamt bester** und **schnellster** |
-| EuroLight Fulfillment (Demo), PL | 11,60 € | 4–7 Tage | Vorkasse | 74,8 | **günstigster** (Vorfinanzierung nötig) |
-| Brightline Demo Co., CN | 11,20 € | 9–16 Tage | – | – | ausgeschlossen: Lieferzeit über 12 Tage |
+| Lumio Großhandel (Demo), DE | 13,80 € | 2–3 Tage | 30 Tage Ziel | 89,6 | **schnellster und insgesamt bester** |
+| EuroLight Fulfillment (Demo), PL | 11,60 € | 4–7 Tage | 14 Tage Ziel | 85,3 | **günstigster** (Kalkulationsbasis) |
+| Brightline Demo Co., CN | 11,20 € | 9–16 Tage | Vorkasse | – | ausgeschlossen: Lieferzeit zu lang |
 | Shinelight Wholesale (Demo) | 8,20 € | – | – | – | ausgeschlossen: nur ähnliche Variante |
 | Voltmarkt Restposten (Demo) | 10,40 € | – | – | – | ausgeschlossen: CE fehlt, Sicherheitshinweise unbestätigt |
+| Stripe & Co. Lager (Demo) | – | – | – | – | ausgeschlossen: kein Bestand |
 | Bulkware Demo Trading | – | – | – | – | ausgeschlossen: Mindestabnahme 100 (Vorratskauf) |
 
 Beispielbegründung für „insgesamt bester":
 
-> Höchste Gesamtbewertung: 89,7 von 100 (Kosten 84,1, Tempo 90, Zuverlässigkeit 94,4, Finanzierung 100).
+> Höchste Gesamtbewertung: 89,6 von 100 (Kosten 84,1, Tempo 90, Zuverlässigkeit 93,8, Finanzierung 100).
 > Gewichtung: Kosten 40 %, Tempo 25 %, Zuverlässigkeit 25 %, Finanzierung 10 %.
-> 14,9 Punkte vor EuroLight Fulfillment (Demo) (74,8).
+> 4,3 Punkte vor EuroLight Fulfillment (Demo) (85,3).
 > 2,20 € teurer als das günstigste Angebot (EuroLight Fulfillment (Demo)), dafür insgesamt besser.
-> Zugleich das schnellste geeignete Angebot.
-> Bestätigtes Zahlungsziel 14 Tage – keine Vorfinanzierung.
-
-### Demo-Daten
-
-`src/lib/suppliers/demo/demo-suppliers.ts` deckt alle fünf Dashboard-Produkte ab. Preis, Versand, Import,
-Lieferzeit, Bewertung, Bestand und Zahlungsbedingungen werden **1:1 aus `src/lib/demo/suppliers.ts`** übernommen –
-Dashboard und Scout zeigen also dieselben Zahlen (per Test abgesichert). Ergänzt werden nur Angaben, die das alte
-Modell nicht kennt: Produktidentität (fiktive GTINs mit Präfix 200), Produktsicherheit, Dropshipping,
-Pünktlichkeit, Reklamationsquote, Musterprüfung und Gewerbeprüfung. Ob CE Pflicht ist, kommt aus den
-Compliance-Hinweisen des Produkts. Fünf zusätzliche Angebote gibt es nur im Scout; sie zeigen Ausschlussgründe
-(Identität, CE, Vorratskauf, Behördenwarnung, kein Bestand).
+> Bestätigtes Zahlungsziel 30 Tage – keine Vorfinanzierung.
 
 ## Schnittstelle für echte Lieferanten
 
@@ -255,52 +234,42 @@ Regeln für echte Adapter:
 Für Quellen ohne GTIN-Suche (z. B. Marktplätze) kann `ProductQuery` zusätzlich `keywords` und `category`
 enthalten. Ein Treffer über Suchbegriffe ersetzt nie die Identitätsprüfung.
 
-## Integration in das Dashboard (in Arbeit)
+## Integration in das Dashboard (umgesetzt am 31.10.2026)
 
-Die bestehende Seite `/lieferanten` nutzt `evaluateOffers` aus `src/lib/calc/suppliers.ts` mit dem älteren,
-flachen Typ `SupplierOffer`.
+- **Eine Datenquelle:** Die Demo-Angebote in `demo/demo-suppliers.ts` decken alle fünf Produkte ab und ersetzen
+  die frühere Datei `src/lib/demo/suppliers.ts`. Widersprüche wurden zugunsten der Werte aufgelöst, auf denen die
+  Shopify-„Kosten pro Artikel“ beruhen (z. B. Brightline LED 9–16 Tage, Lumio 10,90 €).
+- **Eine Bewertungslogik:** `getProductAnalyses()` (`src/lib/data.ts`) nutzt `compareQuotes`. Das alte flache Modell
+  wird über `toOfferEvaluations` (`legacy.ts`) daraus abgeleitet. **Kalkulationsbasis** für Marge, Pipeline und
+  Shopify „Kosten pro Artikel“ ist der günstigste geeignete Lieferant – unverändert 11,60 / 15,10 / 3,90 / 8,50 / 4,40 €
+  (Test: `dashboard.test.ts`, CSV-Snapshot).
+- **Seite `/lieferanten`:** `getSupplierScoutReports()` → `buildSupplierView()` (`dashboard.ts`) → Komponenten in
+  `src/components/suppliers/supplier-scout.tsx`. Je Produkt: günstigster, schnellster und insgesamt bester geeigneter
+  Lieferant (gleiche Angebote zu einer Karte zusammengefasst), Einkauf/Versand/Import, Lieferzeit nach DE,
+  Finanzierung, Marge nach `calculateMargin`, Status jeder Angabe (bestätigt/unbestätigt/fehlt), offene
+  Compliance-Nachweise (`ProductQuery.safety.requiredDocuments`), ausgeschlossene Angebote mit Gründen.
+- **Kennzeichnung:** Demo-Daten, fehlende Produktnachweise, unsichere Finanzierung, nicht gesicherte Lieferfähigkeit,
+  nicht bestätigtes Dropshipping. Jede Empfehlungskarte: „Empfehlung, keine Einkaufsfreigabe · Einkaufssperre: Vorkasse“.
+- **Keine Aktionen:** keine Knöpfe, Formulare, Client-Logik oder Server-Aktionen, kein Shopify-Zugriff – per
+  Sicherheitstest abgesichert. Die Seite ist reine Anzeige.
 
-Erledigt:
+### Kopplung an Produktdaten und Shopify
 
-- Strukturierte Empfehlungsfelder (`approval`, `demo`, `requiresPrefinancing`, `openPoints` …).
-- Einheitliche Demo-Daten für alle fünf Produkte.
-- **Datenzugriff:** `getSupplierScoutReports()` in `src/lib/data.ts` liefert je Demo-Produkt
-  `{ product, report, margins }`. `report` ist der `ScoutReport` (oder `null`, wenn für ein Produkt keine
-  Lieferantensuche definiert ist), `margins` der Deckungsbeitrag je **geeignetem** Angebot, gerechnet mit dem
-  Zielpreis. Die Funktion ist asynchron, ruft die Einkaufssperre nie auf und übergibt ihr nichts. Ein Test stellt
-  sicher, dass Seiten und Komponenten weder `evaluateAutoPurchase` noch `toPurchaseGuardTerms` importieren und
-  dass der günstigste geeignete Lieferant mit der bisherigen Produktanalyse übereinstimmt.
+`links.ts` verbindet Produkt-ID → `ProductQuery` (GTIN, Pflichtnachweise) → Lieferantenangebote und Produkt-ID →
+Shopify-Listing (Handle, Varianten-SKUs). Die Angebots-ID der Kalkulationsbasis geht als Metafeld
+`ai_commerce.supplier_offer_id` mit der Produkteingabe an Shopify (nur beim Neuanlegen von Entwürfen).
 
-- **Empfehlungskarten:** `/lieferanten` ist eine `async` Server Component und zeigt über
-  `src/components/suppliers/scout-recommendations.tsx` je Produkt (Tabs) drei Karten: Günstigster, Schnellster,
-  Insgesamt bester. Jede Karte zeigt Lieferant, Gesamtkosten je Stück, Lieferzeit, Punkte, Deckungsbeitrag,
-  ein Demo-Abzeichen, den Finanzierungsstatus (grün nur ohne Vorfinanzierung), die offenen Punkte und die
-  aufklappbare Begründung. Hinweise des Berichts (z. B. „Alle geeigneten Angebote erfordern Vorfinanzierung")
-  stehen darüber. Kein Bestellknopf; Hinweis „Eine Empfehlung ist keine Einkaufsfreigabe". Auf dem Handy liegen
-  die Karten untereinander, ab breiten Bildschirmen (xl) nebeneinander. Die bisherige Vergleichstabelle bleibt
-  vorerst darunter.
-- **Nachweise und Finanzierung:** Jede Karte zeigt die Nachweise des Angebots (Produktidentität, CE, verantwortliche
-  Person EU, Sicherheitshinweise DE, Unterlagen, geprüftes Muster, Direktversand, neutraler Versand) mit Status
-  „bestätigt", „nur behauptet", „fehlt", „nicht vorhanden" oder „nicht nötig". Die Logik steckt als reine,
-  getestete Funktion in `src/lib/suppliers/evidence.ts` und folgt denselben Regeln wie die Eignungsprüfung. Bei
-  einem Zahlungsziel in Tagen erklärt eine Zeile unter dem Abzeichen die Finanzierung.
-- **Ausgeschlossene Angebote:** aufklappbare Liste je Produkt mit Lieferant, Versandland, Kosten (falls bekannt),
-  Kurzgründen als Abzeichen und den vollständigen Ausschlussgründen. Darunter der Status der Datenquellen
-  (abgefragt / gesperrt / Fehler, mit Anzahl der Angebote).
-- **Mindestanforderungen:** Die Karte nennt zusätzlich die harten Scout-Kriterien (Identität, Produktsicherheit,
-  Direktversand, kein Vorratskauf, Kosten vollständig, keine Sicherheitsprobleme) und erklärt, dass Vorkasse und
-  unklare Zahlungsziele nicht ausschließen, sondern als Vorfinanzierung markiert werden.
-- Eine leere verantwortliche Person in der EU (`confirmed("")`) gilt nicht mehr als Nachweis und schließt das
-  Angebot aus.
+Offene Lücke für die Automatisierung: Angebote gelten heute je **Produkt**. Für Varianten (Farben, Größen) braucht es je
+Shopify-SKU die Artikelnummer des Lieferanten (`supplierSkuByShopifySku`); die Seite weist sie als offen aus.
 
-Offen, jeweils nach Absprache:
+### Nächste Schritte zu echten Lieferanten
 
-1. **Freigabe-Fluss:** Die Empfehlung „insgesamt bester" als `ApprovalRequest` vom Typ `supplier_change` in die
-   Freigabeliste übernehmen. Eine Freigabe setzt nur den „freigegebenen Lieferanten" je Produkt – Einkäufe bleiben
-   über `SAFETY_SWITCHES.autoPurchaseEnabled` gesperrt.
-
-Später kann der Agent-Eintrag „Lieferanten-Scout" in `src/lib/demo/agents.ts` die Anzahl geprüfter und
-ausgeschlossener Angebote aus dem Bericht anzeigen.
+1. **Manuelle Preisliste als erster echter Adapter** (`kind: "manual"`, `paid: false`, `network: false`): Angebote
+   aus einer geprüften CSV eines Großhändlers einlesen, Angaben nur mit Quelle und Prüfdatum als `confirmed`.
+2. **Echte GTINs** der Zielprodukte erfassen und je Variante die Lieferanten-Artikelnummer zuordnen.
+3. **Freigabe-Fluss:** Empfehlung „insgesamt bester" als `ApprovalRequest` (`supplier_change`) – eine Freigabe setzt nur
+   den freigegebenen Lieferanten je Produkt; Einkäufe bleiben über `SAFETY_SWITCHES.autoPurchaseEnabled` gesperrt.
+4. **Feeds/APIs** erst nach Kosten- und Netzwerkfreigabe (`paid`/`network`, Sicherheitstest `NETWORK_ALLOWED`).
 
 ## Sicherheit
 
@@ -309,3 +278,5 @@ ausgeschlossener Angebote aus dem Bericht anzeigen.
 - Angebote aus Demo-Adaptern werden immer als `demo: true` markiert; jede Begründung enthält dann
   „Demo-Daten – keine echte Einkaufsgrundlage".
 - Bestehende Sicherheitsschalter und Einkaufssperren werden nur gelesen, nie verändert.
+- Die Seite `/lieferanten` ist reine Anzeige: keine Knöpfe, Formulare oder Server-Aktionen, kein Shopify-Zugriff
+  (Sicherheitstest in `src/lib/guards/safety.test.ts`). Eine Empfehlung ist nie eine Einkaufsfreigabe.

@@ -1,8 +1,8 @@
-// Produktabgleich Dashboard -> Shopify. Heute ausschließlich Dry-Run: Es gibt bewusst noch keinen
-// HTTP-Transport (siehe src/lib/guards/safety.test.ts). Ein echter Transport wird erst ergänzt, wenn
-// SAFETY_SWITCHES.shopifyWriteEnabled per Code-Review eingeschaltet wird.
+// Produktabgleich Dashboard -> Shopify: Planung und Dry-Run (Vorschau im Dashboard).
+// Echte Schreibzugriffe laufen NICHT hierüber, sondern ausschließlich über den abgesicherten
+// Schreib-Client in server/admin-client.ts mit der Positivliste aus write-operations.ts.
+// syncProducts nimmt daher nur Dry-Run-Transporte an.
 
-import { SAFETY_SWITCHES } from "@/lib/config/budget";
 import type { ProductAnalysis } from "@/lib/data";
 import { assertOperationAllowed, assertProductInputAllowed } from "./guards";
 import { PRODUCT_SET_MUTATION } from "./graphql";
@@ -45,19 +45,13 @@ export function planProductSync(analyses: ProductAnalysis[], listings: ProductLi
   });
 }
 
-export interface SyncOptions {
-  /** Nur für Tests: Schalterstand überschreiben */
-  writeEnabled?: boolean;
-}
-
 /**
- * Sendet die geplanten Produkte über den Transport. Echte Schreibzugriffe sind nur erlaubt, wenn
- * der Sicherheitsschalter an ist; Guards laufen in jedem Fall vor jedem Aufruf.
+ * Spielt die geplanten Produkte im Dry-Run durch. Guards laufen vor jedem Aufruf. Echte Transporte
+ * werden abgelehnt – es gibt genau einen Schreibweg (Schreib-Client in server/admin-client.ts).
  */
-export async function syncProducts(planned: PlannedProduct[], transport: ShopifyAdminTransport, options: SyncOptions = {}) {
-  const writeEnabled = options.writeEnabled ?? SAFETY_SWITCHES.shopifyWriteEnabled;
-  if (!transport.dryRun && !writeEnabled) {
-    throw new Error("Shopify-Schreibzugriff ist deaktiviert (SAFETY_SWITCHES.shopifyWriteEnabled).");
+export async function syncProducts(planned: PlannedProduct[], transport: ShopifyAdminTransport) {
+  if (!transport.dryRun) {
+    throw new Error("syncProducts ist nur ein Dry-Run. Echte Schreibzugriffe laufen nur über npm run shopify:sync.");
   }
   assertOperationAllowed(PRODUCT_SET_MUTATION);
 
