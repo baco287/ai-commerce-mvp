@@ -2,6 +2,7 @@ import { CircleAlert, CircleCheck, CircleMinus, CircleX, KeyRound, Lock, PlugZap
 import type { Metadata } from "next";
 import { connection } from "next/server";
 import { Suspense, type ReactNode } from "react";
+import { InventoryPanel } from "@/components/shopify/inventory-panel";
 import { Badge, DemoBadge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -68,7 +69,7 @@ async function LiveSyncStatus() {
   if (status.state === "error") {
     const hint: Record<string, string> = {
       auth: "Zugangsdaten oder App-Installation prüfen (siehe docs/SHOPIFY-API-EINRICHTUNG.md).",
-      scope: "Berechtigungen der App-Version im Dev Dashboard prüfen: nur read_products.",
+      scope: "Berechtigungen der App-Version im Dev Dashboard prüfen: nur read_products und read_inventory.",
       network: "Internetverbindung und Store-Domain prüfen.",
       readonly: "Eine schreibende Abfrage wurde blockiert – das ist ein Programmierfehler.",
       api: "Antwort der Admin API prüfen; ggf. API-Version aktualisieren.",
@@ -78,12 +79,26 @@ async function LiveSyncStatus() {
       <Notice icon={CircleX} tone="red" title="Verbindung fehlgeschlagen">
         <span className="block">{status.message}</span>
         <span className="mt-1 block text-muted">{hint[status.kind]}</span>
+        <span className="mt-2 block text-xs text-muted">
+          Letzte erfolgreiche Synchronisierung:{" "}
+          {status.lastSync.productsAt ? formatDateTime(status.lastSync.productsAt) : "noch keine"}
+        </span>
       </Notice>
     );
   }
 
-  const { shop, result } = status;
+  const { shop, result, lastSync, inventory } = status;
   const currencyOk = shop.currencyCode === "EUR";
+  const lastInventory = lastSync.inventoryAt ? ` – zuletzt vollständig ${formatDateTime(lastSync.inventoryAt)}` : "";
+  const inventoryLabel =
+    inventory.state === "missing-scope"
+      ? "Berechtigung fehlt"
+      : inventory.state === "error"
+        ? `Fehler${lastInventory}`
+        : inventory.complete
+          ? formatDateTime(status.fetchedAt)
+          : `unvollständig${lastInventory}`;
+  const inventoryOk = inventory.state === "ok" && inventory.complete;
 
   return (
     <div className="space-y-4">
@@ -95,6 +110,11 @@ async function LiveSyncStatus() {
             <Row label="Währung" value={shop.currencyCode} warn={!currencyOk} />
             <Row label="API-Version" value={status.apiVersion} />
             <Row label="Berechtigungen" value={shop.grantedScopes.join(", ") || "–"} />
+          </dl>
+          <p className="mt-4 text-xs font-medium text-subtle">Letzte erfolgreiche Synchronisierung</p>
+          <dl className="mt-1.5 space-y-1.5 text-sm">
+            <Row label="Produkte" value={formatDateTime(lastSync.productsAt ?? status.fetchedAt)} />
+            <Row label="Bestand" value={inventoryLabel} warn={!inventoryOk} />
           </dl>
           {!currencyOk && (
             <p className="mt-3 text-xs text-amber-200">Store-Währung ist nicht EUR – Preise werden als reine Zahlen verglichen.</p>
@@ -113,16 +133,27 @@ async function LiveSyncStatus() {
             {result.otherCount > 0 && " (z. B. Shopify-Testdaten)"}.
           </p>
           <p className="mt-1 text-xs">
-            {result.inventoryChecked ? (
+            {inventory.state === "ok" && (
               <span className="text-emerald-300">Bestand, Bestandsverfolgung und Kosten pro Artikel werden mitgeprüft (read_inventory).</span>
-            ) : (
-              <span className="text-subtle">
-                Bestand und Kosten werden nicht geprüft – dafür braucht die App zusätzlich read_inventory.
-              </span>
+            )}
+            {inventory.state === "missing-scope" && (
+              <span className="text-subtle">Bestand und Kosten werden nicht geprüft – dafür braucht die App zusätzlich read_inventory.</span>
+            )}
+            {inventory.state === "error" && (
+              <span className="text-amber-200">Bestand und Kosten konnten nicht geprüft werden – siehe Karte „Shopify-Bestand“.</span>
             )}
           </p>
+          {(status.moreProducts || status.moreVariantsIn.length > 0) && (
+            <p className="mt-1 text-xs text-amber-200">
+              Unvollständig gelesen:
+              {status.moreProducts && " mehr als 1000 Produkte im Store, nur die ersten 1000 sind berücksichtigt."}
+              {status.moreVariantsIn.length > 0 && ` mehr als 100 Varianten bei ${status.moreVariantsIn.join(", ")}.`}
+            </p>
+          )}
         </Card>
       </div>
+
+      <InventoryPanel inventory={inventory} />
 
       <Card title="Demo-Produkte im Vergleich" description="Soll = Kontrollzentrale, Ist = Shopify" flush>
         <Table minWidth={860}>
@@ -200,8 +231,9 @@ function SetupHelp({ missing, problems }: { missing: string[]; problems: string[
             Im <span className="text-fg">Shopify Dev Dashboard</span> eine App anlegen (gleiche Organisation wie der Store yakru).
           </li>
           <li>
-            In der App-Version nur die Berechtigung <code className="rounded bg-surface-2 px-1 font-mono text-xs text-fg">read_products</code>{" "}
-            auswählen, Version veröffentlichen und die App auf dem Store installieren.
+            In der App-Version nur die Berechtigungen <code className="rounded bg-surface-2 px-1 font-mono text-xs text-fg">read_products</code> und{" "}
+            <code className="rounded bg-surface-2 px-1 font-mono text-xs text-fg">read_inventory</code> auswählen, Version veröffentlichen und
+            die App auf dem Store installieren.
           </li>
           <li>
             Client ID und Client Secret in die Datei <code className="rounded bg-surface-2 px-1 font-mono text-xs text-fg">.env.local</code> im

@@ -133,7 +133,7 @@ describe("Pipeline zur Produktanlage (Dry-Run)", () => {
 describe("Abgleich mit Bestand (read_inventory)", () => {
   const withInventory = (handle: string, inv: { tracked: boolean; quantity: number | null; unitCost: string | null }) => {
     const p = asShopify(handle);
-    p.variants = p.variants.map((v) => ({ ...v, inventory: { ...inv } }));
+    p.variants = p.variants.map((v) => ({ ...v, inventory: { ...inv, locations: [], locationsTruncated: false } }));
     return p;
   };
 
@@ -152,6 +152,31 @@ describe("Abgleich mit Bestand (read_inventory)", () => {
       { field: "Bestand verfolgt DEMO-LED-001", expected: "ja", actual: "nein" },
       { field: "Bestand DEMO-LED-001", expected: "0", actual: "5" },
       { field: "Kosten DEMO-LED-001", expected: "11.60", actual: "nicht gepflegt" },
+    ]);
+  });
+
+  const diffsOf = (r: ReturnType<typeof reconcile>) => {
+    const row = r.rows[0];
+    if (row.kind === "missing") throw new Error("erwartet gefunden");
+    return row.diffs;
+  };
+
+  it("meldet eine Variante ohne Bestandsdaten, wenn der Bestand gelesen wurde (Kaufsperre nicht prüfbar)", () => {
+    const r = reconcile(expected(), [asShopify("demo-led-lichtleiste")], { inventoryRead: true });
+    expect(r.inventoryChecked).toBe(true);
+    expect(diffsOf(r)).toEqual([{ field: "Bestand DEMO-LED-001", expected: "0", actual: "nicht gelesen" }]);
+  });
+
+  it("wertet einen Artikel ohne Standort als Bestand 0", () => {
+    const r = reconcile(expected(), [withInventory("demo-led-lichtleiste", { tracked: true, quantity: null, unitCost: "11.60" })], { inventoryRead: true });
+    expect(r.rows[0].kind).toBe("match");
+  });
+
+  it("meldet Bestand als unvollständig, wenn nicht alle Standorte gelesen wurden", () => {
+    const p = withInventory("demo-led-lichtleiste", { tracked: true, quantity: 0, unitCost: "11.60" });
+    p.variants[0].inventory!.locationsTruncated = true;
+    expect(diffsOf(reconcile(expected(), [p], { inventoryRead: true }))).toEqual([
+      { field: "Bestand DEMO-LED-001", expected: "0", actual: "0+ (unvollständig, mehr als 10 Standorte)" },
     ]);
   });
 });

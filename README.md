@@ -50,7 +50,7 @@ Dashboard: <http://localhost:3000>
 | `/lieferanten` | Mehrere Angebote je Produkt, Vergleich von Einkauf, Versand, Import, Lieferzeit; Markierung des günstigsten **geeigneten** Lieferanten |
 | `/agenten` | Die sechs KI-Agenten mit Befugnissen, Freigabepflichten und Status (Pausieren nur lokal) |
 | `/freigaben` | Freigabe-Warteschlange, Sicherheitsschalter, Grenzwerte, Startbudget 500 € |
-| `/shopify` | Shopify-Synchronisierung: **echte** Produktdaten aus dem Dev Store (nur lesend) im Abgleich mit der Kontrollzentrale; Dry-Run der automatischen Produktanlage |
+| `/shopify` | Shopify-Synchronisierung: **echte** Produktdaten aus dem Dev Store (nur lesend) im Abgleich mit der Kontrollzentrale; Shopify-Bestand je Standort (mit `read_inventory`), getrennt vom Lieferantenbestand; letzte erfolgreiche Synchronisierung; Dry-Run der automatischen Produktanlage |
 
 ## Tech-Stack
 

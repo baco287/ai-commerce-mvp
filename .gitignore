@@ -42,8 +42,9 @@ pnpm-debug.log*
 Thumbs.db
 desktop.ini
 
-# Claude Code (local settings)
+# Claude Code (local settings, Worktrees paralleler Sitzungen)
 .claude/settings.local.json
+.claude/worktrees/
 
 # Next.js / TypeScript
 *.tsbuildinfo
@@ -61,6 +62,9 @@ next-env.d.ts
 credentials*.json
 service-account*.json
 secrets/
+
+# Lokaler Laufzeitstand der Kontrollzentrale (z. B. letzte Shopify-Synchronisierung)
+.data/
 
 # Shopify CLI (lokale Metadaten, Store-Verknüpfung)
 .shopify/

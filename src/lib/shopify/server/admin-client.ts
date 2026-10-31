@@ -96,7 +96,8 @@ export async function createReadOnlyAdminClient(
       }
       const body = (await response.json()) as { data?: T; errors?: { message: string }[] };
       if (body.errors?.length) {
-        const message = body.errors.map((e) => e.message).join("; ");
+        // Gleiche Meldungen (z. B. „Access denied“ je abgefragtem Lagerartikel) nur einmal ausgeben.
+        const message = [...new Set(body.errors.map((e) => e.message))].join("; ");
         const kind = /access denied|scope/i.test(message) ? "scope" : "api";
         throw new ShopifyConnectionError(`Admin API meldet: ${redact(message, secrets).slice(0, 300)}`, kind);
       }

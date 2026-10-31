@@ -44,28 +44,45 @@ export const SHOP_INFO_QUERY = /* GraphQL */ `
   }
 `;
 
+/** Mengenarten je Standort (Shopify „inventory states“). */
+export const INVENTORY_QUANTITY_NAMES = ["available", "on_hand", "committed", "incoming"] as const;
+
+/** Standorte je Lagerartikel; mehr meldet die Abfrage über pageInfo als „abgeschnitten“. */
+export const INVENTORY_LOCATIONS_PER_ITEM = 10;
+
+/** Lagerartikel je Bestandsabfrage. Klein halten: Shopify begrenzt die Kosten einer Abfrage auf 1000 Punkte. */
+export const INVENTORY_ITEMS_PER_QUERY = 25;
+
 /**
- * Bestand, Bestandsverfolgung und „Kosten pro Artikel“ je Variante. Braucht read_inventory und wird
- * nur abgefragt, wenn die App dieses Recht tatsächlich hat (sonst bleibt der Abgleich ohne Bestand).
+ * Bestand je Lagerartikel und Standort, Bestandsverfolgung und „Kosten pro Artikel“. Braucht
+ * read_inventory und wird nur abgefragt, wenn die App dieses Recht tatsächlich hat.
+ *
+ * Fragt gezielt die Lagerartikel der gelesenen Varianten ab (IDs aus PRODUCTS_QUERY) statt aller
+ * Lagerartikel des Shops – so passt der Bestand immer genau zu den Produkten. InventoryItem.variant
+ * ist veraltet, daher die Zuordnung über die ID. Unbekannte IDs liefert Shopify als null.
  */
-export const INVENTORY_QUERY = /* GraphQL */ `
-  query AiCommerceInventory($first: Int!, $after: String) {
-    products(first: $first, after: $after, sortKey: TITLE) {
-      pageInfo {
-        hasNextPage
-        endCursor
-      }
-      nodes {
+export const INVENTORY_ITEMS_QUERY = /* GraphQL */ `
+  query AiCommerceInventoryItems($ids: [ID!]!) {
+    nodes(ids: $ids) {
+      ... on InventoryItem {
         id
-        variants(first: 100) {
+        tracked
+        unitCost {
+          amount
+        }
+        inventoryLevels(first: ${INVENTORY_LOCATIONS_PER_ITEM}) {
+          pageInfo {
+            hasNextPage
+          }
           nodes {
-            id
-            inventoryQuantity
-            inventoryItem {
-              tracked
-              unitCost {
-                amount
-              }
+            location {
+              id
+              name
+              isActive
+            }
+            quantities(names: ${JSON.stringify(INVENTORY_QUANTITY_NAMES)}) {
+              name
+              quantity
             }
           }
         }
@@ -94,12 +111,18 @@ export const PRODUCTS_QUERY = /* GraphQL */ `
           id
         }
         variants(first: 100) {
+          pageInfo {
+            hasNextPage
+          }
           nodes {
             id
             title
             sku
             price
             inventoryPolicy
+            inventoryItem {
+              id
+            }
             selectedOptions {
               name
               value

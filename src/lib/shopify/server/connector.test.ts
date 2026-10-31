@@ -3,6 +3,7 @@ import { SHOPIFY_ADMIN_API_VERSION } from "../graphql";
 import { assertReadOnlyDocument, createReadOnlyAdminClient } from "./admin-client";
 import { clearTokenCache, getAccessToken, type FetchLike } from "./auth";
 import { isLocalDevelopment, readShopifyConfig, type ShopifyCredentials } from "./config";
+import { readAllProducts, readInventory } from "./read-products";
 import { redact, ShopifyConnectionError } from "./redact";
 
 const credentials: ShopifyCredentials = {
@@ -17,8 +18,13 @@ interface Call {
   body: string;
 }
 
-/** Fake-Shopify: Token-Endpunkt + GraphQL-Endpunkt, zeichnet alle Aufrufe auf. */
-function fakeShopify(opts: { scope?: string; tokenStatus?: number; tokenBody?: string; graphql?: unknown } = {}) {
+/**
+ * Fake-Shopify: Token-Endpunkt + GraphQL-Endpunkt, zeichnet alle Aufrufe auf.
+ * `graphql` ist eine feste Antwort oder eine Funktion des gesendeten Dokuments.
+ */
+function fakeShopify(
+  opts: { scope?: string; tokenStatus?: number; tokenBody?: string; graphql?: unknown | ((query: string, variables: Record<string, unknown>) => unknown) } = {},
+) {
   const calls: Call[] = [];
   const fetchImpl: FetchLike = async (url, init) => {
     calls.push({ url, headers: init.headers, body: init.body });
@@ -31,7 +37,9 @@ function fakeShopify(opts: { scope?: string; tokenStatus?: number; tokenBody?: s
         text: async () => opts.tokenBody ?? "",
       };
     }
-    return { ok: true, status: 200, json: async () => opts.graphql ?? { data: { ok: true } }, text: async () => "" };
+    const request = JSON.parse(init.body) as { query: string; variables: Record<string, unknown> };
+    const answer = typeof opts.graphql === "function" ? opts.graphql(request.query, request.variables) : opts.graphql;
+    return { ok: true, status: 200, json: async () => answer ?? { data: { ok: true } }, text: async () => "" };
   };
   return { calls, fetchImpl };
 }
@@ -129,6 +137,13 @@ describe("Read-only-Admin-Client", () => {
     await expect(createReadOnlyAdminClient(credentials, fakeShopify({ scope: "read_products,read_orders" }).fetchImpl)).rejects.toThrow(/nicht vorgesehene Rechte/);
   });
 
+  it("lehnt jede Schreibberechtigung ab, auch für Bestand und Standorte", async () => {
+    for (const scope of ["read_products,read_inventory,write_inventory", "read_products,write_locations", "read_products,read_inventory,write_products"]) {
+      clearTokenCache();
+      await expect(createReadOnlyAdminClient(credentials, fakeShopify({ scope }).fetchImpl), scope).rejects.toThrow(/Schreibrechte/);
+    }
+  });
+
   it("bricht ab, wenn read_products fehlt", async () => {
     const { fetchImpl } = fakeShopify({ scope: "read_inventory" });
     await expect(createReadOnlyAdminClient(credentials, fetchImpl)).rejects.toThrow(/read_products/);
@@ -144,5 +159,139 @@ describe("Read-only-Admin-Client", () => {
     if (!(error instanceof ShopifyConnectionError)) throw new Error("ShopifyConnectionError erwartet");
     expect(error.kind).toBe("scope");
     expect(error.message).not.toContain("shpat_faketoken123456");
+  });
+});
+
+describe("Produkte und Bestand lesen", () => {
+  const level = (id: string, name: string, available: number, onHand = available) => ({
+    location: { id, name, isActive: true },
+    quantities: [
+      { name: "available", quantity: available },
+      { name: "on_hand", quantity: onHand },
+      { name: "committed", quantity: onHand - available },
+      { name: "incoming", quantity: 0 },
+    ],
+  });
+  const variant = (n: number) => ({
+    id: `v${n}`,
+    title: `Variante ${n}`,
+    sku: `L-${n}`,
+    price: "10.00",
+    inventoryPolicy: "DENY",
+    inventoryItem: { id: `item-${n}` },
+    selectedOptions: [],
+  });
+  const product = (handle: string, variantNumbers: number[], moreVariants = false) => ({
+    id: `gid://shopify/Product/${handle}`,
+    title: handle,
+    handle,
+    status: "ACTIVE",
+    vendor: "",
+    productType: "",
+    tags: [],
+    featuredMedia: null,
+    variants: { pageInfo: { hasNextPage: moreVariants }, nodes: variantNumbers.map(variant) },
+  });
+  const ITEMS: Record<string, unknown> = {
+    "item-1": {
+      id: "item-1",
+      tracked: true,
+      unitCost: { amount: "4.5" },
+      inventoryLevels: { pageInfo: { hasNextPage: false }, nodes: [level("loc-a", "Lager A", 7, 9), level("loc-b", "Lager B", 3)] },
+    },
+    "item-2": { id: "item-2", tracked: false, unitCost: null, inventoryLevels: { pageInfo: { hasNextPage: true }, nodes: [] } },
+  };
+
+  /** Fake mit Produktseiten und Bestandsabfrage per ID; unbekannte IDs liefert Shopify als null. */
+  function shopify(productPages: unknown[][] = [[product("lampe", [1, 2])]], items: Record<string, unknown> = ITEMS) {
+    return fakeShopify({
+      scope: "read_products,read_inventory",
+      graphql: (query: string, variables: Record<string, unknown>) => {
+        if (query.includes("nodes(ids:")) return { data: { nodes: (variables.ids as string[]).map((id) => items[id] ?? null) } };
+        const index = variables.after ? Number(variables.after) : 0;
+        const hasNextPage = index + 1 < productPages.length;
+        return { data: { products: { pageInfo: { hasNextPage, endCursor: hasNextPage ? String(index + 1) : null }, nodes: productPages[index] } } };
+      },
+    });
+  }
+
+  it("ordnet Bestand je Standort über die Lagerartikel-ID der Variante zu", async () => {
+    const client = await createReadOnlyAdminClient(credentials, shopify().fetchImpl);
+    const { products, missingVariants } = await readInventory(client, (await readAllProducts(client)).products);
+    const [black, white] = products[0].variants;
+
+    expect(missingVariants).toBe(0);
+    expect(black.inventoryItemId).toBe("item-1");
+    expect(black.inventory).toEqual({
+      tracked: true,
+      quantity: 10,
+      unitCost: "4.50",
+      locationsTruncated: false,
+      locations: [
+        { locationId: "loc-a", locationName: "Lager A", locationActive: true, available: 7, onHand: 9, committed: 2, incoming: 0 },
+        { locationId: "loc-b", locationName: "Lager B", locationActive: true, available: 3, onHand: 3, committed: 0, incoming: 0 },
+      ],
+    });
+    expect(white.inventory).toMatchObject({ tracked: false, quantity: null, unitCost: null, locationsTruncated: true });
+  });
+
+  it("fragt genau die Lagerartikel der gelesenen Varianten ab, in Paketen von 25", async () => {
+    const numbers = Array.from({ length: 30 }, (_, i) => i + 1);
+    const { calls, fetchImpl } = shopify([[product("viele", numbers)]]);
+    const client = await createReadOnlyAdminClient(credentials, fetchImpl);
+    await readInventory(client, (await readAllProducts(client)).products);
+    const inventoryCalls = calls
+      .filter((c) => c.url.endsWith("/graphql.json"))
+      .map((c) => JSON.parse(c.body) as { query: string; variables: { ids?: string[] } })
+      .filter((b) => b.query.includes("nodes(ids:"));
+    expect(inventoryCalls.map((b) => b.variables?.ids?.length)).toEqual([25, 5]);
+    expect(inventoryCalls.flatMap((b) => b.variables?.ids ?? [])).toEqual(numbers.map((n) => `item-${n}`));
+  });
+
+  it("meldet Varianten ohne Bestandsdaten, statt sie zu verschweigen", async () => {
+    const client = await createReadOnlyAdminClient(credentials, shopify([[product("lampe", [1, 2, 3])]]).fetchImpl);
+    const { products, missingVariants } = await readInventory(client, (await readAllProducts(client)).products);
+    expect(missingVariants).toBe(1);
+    expect(products[0].variants[2].inventory).toBeUndefined();
+  });
+
+  it("meldet abgeschnittene Produkt- und Variantenlisten", async () => {
+    const pages = [[product("a", [1])], [product("b", [2], true)], [product("c", [3])]];
+    const client = await createReadOnlyAdminClient(credentials, shopify(pages).fetchImpl);
+    const all = await readAllProducts(client);
+    expect(all).toMatchObject({ moreProducts: false, moreVariantsIn: ["b"] });
+    expect(all.products.map((p) => p.handle)).toEqual(["a", "b", "c"]);
+    const limited = await readAllProducts(client, { maxPages: 2 });
+    expect(limited).toMatchObject({ moreProducts: true, moreVariantsIn: ["b"] });
+  });
+
+  it("sendet für den Bestand nur lesende Abfragen", async () => {
+    const { calls, fetchImpl } = shopify();
+    const client = await createReadOnlyAdminClient(credentials, fetchImpl);
+    await readInventory(client, (await readAllProducts(client)).products);
+    const documents = calls.slice(1).map((c) => (JSON.parse(c.body) as { query: string }).query);
+    expect(documents).toHaveLength(2);
+    for (const d of documents) expect(() => assertReadOnlyDocument(d)).not.toThrow();
+    expect(documents[1]).toMatch(/quantities\(names: \["available","on_hand","committed","incoming"\]\)/);
+  });
+
+  it("meldet fehlendes read_inventory als Berechtigungsfehler ohne Zugangsdaten", async () => {
+    const { fetchImpl } = fakeShopify({
+      graphql: (query: string) =>
+        query.includes("nodes(ids:")
+          ? { errors: [1, 2, 3].map(() => ({ message: "Access denied for inventoryLevels field. Required access: `read_inventory` access scope." })) }
+          : { data: { products: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [product("lampe", [1])] } } },
+    });
+    const client = await createReadOnlyAdminClient(credentials, fetchImpl);
+    const { products } = await readAllProducts(client);
+    const error = await readInventory(client, products).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    if (!(error instanceof ShopifyConnectionError)) throw new Error("ShopifyConnectionError erwartet");
+    expect(error.kind).toBe("scope");
+    expect(error.message).toContain("read_inventory");
+    expect(error.message.match(/Access denied/g)).toHaveLength(1);
+    for (const secret of [credentials.clientSecret, credentials.clientId, "shpat_faketoken123456"]) expect(error.message).not.toContain(secret);
   });
 });

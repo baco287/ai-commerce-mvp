@@ -4,12 +4,31 @@
 import { DEMO_MARKERS } from "./listings";
 import type { ProductSetInput } from "./product-input";
 
+/** Mengen eines Lagerartikels an einem Shopify-Standort. */
+export interface LocationQuantity {
+  locationId: string;
+  locationName: string;
+  locationActive: boolean;
+  /** verkaufbar */
+  available: number;
+  /** physisch vorhanden (inkl. reserviert) */
+  onHand: number;
+  /** durch offene Bestellungen reserviert */
+  committed: number;
+  /** erwarteter Zugang */
+  incoming: number;
+}
+
 /** Bestand und Kosten einer Variante (nur mit read_inventory verfügbar). */
 export interface VariantInventory {
   tracked: boolean;
+  /** Summe „available“ über alle Standorte; null = keine Standortdaten */
   quantity: number | null;
   /** „Kosten pro Artikel“, zwei Nachkommastellen; null = nicht gepflegt */
   unitCost: string | null;
+  locations: LocationQuantity[];
+  /** true, wenn der Artikel an mehr Standorten geführt wird, als abgefragt wurden */
+  locationsTruncated: boolean;
 }
 
 /** Teilmenge der Admin-API-Produktdaten (lesbar mit read_products, Bestand mit read_inventory). */
@@ -30,6 +49,8 @@ export interface ShopifyProduct {
     price: string;
     inventoryPolicy: "DENY" | "CONTINUE";
     selectedOptions: { name: string; value: string }[];
+    /** Lagerartikel-ID; verknüpft die Variante mit den Bestandsdaten */
+    inventoryItemId?: string;
     /** undefined = nicht gelesen (App ohne read_inventory) */
     inventory?: VariantInventory;
   }[];
@@ -52,12 +73,20 @@ export interface ReconcileResult {
   summary: { expected: number; match: number; drift: number; missing: number };
 }
 
-const isDemoLike = (p: ShopifyProduct) =>
+export const isDemoLike = (p: ShopifyProduct) =>
   p.tags.includes(DEMO_MARKERS.tag) ||
   p.handle.startsWith(DEMO_MARKERS.handlePrefix) ||
   p.variants.some((v) => v.sku?.startsWith(DEMO_MARKERS.skuPrefix));
 
-function compareProduct(expected: ProductSetInput, actual: ShopifyProduct): FieldDiff[] {
+export interface ReconcileOptions {
+  /**
+   * Bestand wurde gelesen (read_inventory vorhanden, Abfrage erfolgreich). Dann gilt eine Variante
+   * ohne Bestandsdaten als Abweichung – sonst bliebe eine gebrochene Kaufsperre unbemerkt.
+   */
+  inventoryRead?: boolean;
+}
+
+function compareProduct(expected: ProductSetInput, actual: ShopifyProduct, options: ReconcileOptions): FieldDiff[] {
   const diffs: FieldDiff[] = [];
   const add = (field: string, exp: string, act: string) => {
     if (exp !== act) diffs.push({ field, expected: exp, actual: act });
@@ -87,9 +116,13 @@ function compareProduct(expected: ProductSetInput, actual: ShopifyProduct): Fiel
     add(`Option ${sku}`, ev.optionValues.map((o) => o.name).join(" / "), av.selectedOptions.map((o) => o.value).join(" / "));
     if (av.inventory) {
       // Demo-Produkte: Bestand verfolgt und 0 – Shopify sperrt damit Warenkorb und Checkout serverseitig.
+      // Ohne Standort (quantity null) ist nichts verkaufbar, das entspricht 0.
       add(`Bestand verfolgt ${sku}`, ev.inventoryItem.tracked ? "ja" : "nein", av.inventory.tracked ? "ja" : "nein");
-      add(`Bestand ${sku}`, "0", av.inventory.quantity === null ? "–" : String(av.inventory.quantity));
+      const quantity = String(av.inventory.quantity ?? 0);
+      add(`Bestand ${sku}`, "0", av.inventory.locationsTruncated ? `${quantity}+ (unvollständig, mehr als 10 Standorte)` : quantity);
       add(`Kosten ${sku}`, ev.inventoryItem.cost, av.inventory.unitCost ?? "nicht gepflegt");
+    } else if (options.inventoryRead) {
+      diffs.push({ field: `Bestand ${sku}`, expected: "0", actual: "nicht gelesen" });
     }
   }
   const expectedSkus = new Set(expected.variants.map((v) => v.inventoryItem.sku));
@@ -99,7 +132,7 @@ function compareProduct(expected: ProductSetInput, actual: ShopifyProduct): Fiel
   return diffs;
 }
 
-export function reconcile(expected: ProductSetInput[], shopify: ShopifyProduct[]): ReconcileResult {
+export function reconcile(expected: ProductSetInput[], shopify: ShopifyProduct[], options: ReconcileOptions = {}): ReconcileResult {
   const used = new Set<string>();
   const rows: ReconcileRow[] = expected.map((exp) => {
     const skus = new Set(exp.variants.map((v) => v.inventoryItem.sku));
@@ -111,7 +144,7 @@ export function reconcile(expected: ProductSetInput[], shopify: ShopifyProduct[]
     }
     if (!found) return { kind: "missing", handle: exp.handle, title: exp.title, expected: exp };
     used.add(found.id);
-    const diffs = compareProduct(exp, found);
+    const diffs = compareProduct(exp, found, options);
     return { kind: diffs.length ? "drift" : "match", handle: exp.handle, title: found.title, matchedBy, shopifyId: found.id, diffs };
   });
 
@@ -121,7 +154,7 @@ export function reconcile(expected: ProductSetInput[], shopify: ShopifyProduct[]
     rows,
     unknownDemo,
     otherCount: rest.length - unknownDemo.length,
-    inventoryChecked: shopify.some((p) => p.variants.some((v) => v.inventory !== undefined)),
+    inventoryChecked: options.inventoryRead ?? shopify.some((p) => p.variants.some((v) => v.inventory !== undefined)),
     summary: {
       expected: expected.length,
       match: rows.filter((r) => r.kind === "match").length,
