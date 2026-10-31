@@ -40,6 +40,7 @@ src/
     guards/purchase.ts    Einkaufssperre (Zahlung + Finanzierung + Limits)
     shopify/              Shopify-Produktanlage: productSet-Eingabe, Guards, Dry-Run-Abgleich, CSV-Export
     suppliers/            Supplier Scout: Lieferanten-Adapter, Eignung, Finanzierung, Bewertung (docs/SUPPLIER-AGENT.md)
+    market/               Market Scout: Marktsignale (Wikimedia, Demo), Opportunity Score, Pipeline bis zum Shopify-Dry-Run (docs/MARKET-SCOUT.md)
     config/               Annahmen, Budget, Sicherheitsschalter, Freigaberegeln
     demo/                 Gekennzeichnete Demodaten (deterministisch)
 ```
@@ -77,6 +78,14 @@ geeigneten Lieferanten mit Begründung. Details: [SUPPLIER-AGENT.md](SUPPLIER-AG
   werden dabei zu „Vorkasse“, bestätigte auf die nächstkleinere Stufe abgerundet. Der Scout selbst ruft
   die Einkaufssperre nie auf – eine Empfehlung ist keine Einkaufsfreigabe.
 - **Bestände:** Lieferantenbestand (Scout) und Shopify-Bestand (`shopify/inventory.ts`) bleiben getrennt.
+
+## Market Scout
+
+`src/lib/market/` findet Produktthemen (Wikipedia-Kategorien), misst öffentliches Interesse (Wikipedia-Aufrufe,
+kostenlos, 7/30 Tage, Saison) und führt Kandidaten durch die bestehende Kette: Supplier Scout → Profit Check
+(`calc/pricing.ts`, mit Steuerstatus) → Compliance → Shopify-Entwurf (`shopify/pipeline.ts`, nur Dry-Run).
+Läufe per `npm run market:scan`; Netzwerk nur mit `--live`, Ergebnisse lokal in `.data/market/`. Der Agent setzt
+nie „freigegeben“ oder „Entwurf erstellt“. Details: [MARKET-SCOUT.md](MARKET-SCOUT.md).
 
 ## Einkaufssperre
 

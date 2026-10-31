@@ -28,6 +28,19 @@ import {
 } from "@/lib/suppliers";
 import { createPriceListAdapter, priceListQuotesFor, type ImportLogEntry } from "@/lib/suppliers/import";
 import { loadEvidence, loadOfferStore } from "@/lib/suppliers/server/offer-store";
+import {
+  assessRisk,
+  createDemoMarketSource,
+  emptyMarketState,
+  MARKET_SCAN,
+  mergeRun,
+  runMarketScan,
+  type CandidateState,
+  type EvaluationDeps,
+  type RunLogEntry,
+  type StoredCandidate,
+} from "@/lib/market";
+import { isStopRequested, loadMarketState } from "@/lib/market/server/market-store";
 import type { DemoOrder, Product } from "@/lib/types";
 
 export type Recommendation = "kandidat" | "beobachten" | "verwerfen";
@@ -144,6 +157,92 @@ export function getSupplierLinks(): SupplierProductLink[] {
 }
 
 export type { DemoProductId };
+
+/**
+ * Verbindet den Market Scout mit den vorhandenen Bausteinen: Supplier Scout (Demo-Angebote + importierte Preislisten),
+ * Produktanalyse (für den Profit Check und den Shopify-Dry-Run) und Shopify-Listings. Keine eigene Logik.
+ */
+export function marketEvaluationDeps(now: Date): EvaluationDeps {
+  const imported = importedSupplierData();
+  const analyses = new Map(getProductAnalyses().map((a) => [a.product.id, a]));
+  const queries = DEMO_QUERIES as Record<string, ProductQuery>;
+  return {
+    now,
+    supplierInput(candidate) {
+      if (candidate.productId && queries[candidate.productId]) {
+        const query = supplierQueryFor(candidate.productId);
+        return { query, quotes: [...demoQuotesFor(candidate.productId), ...priceListQuotesFor(imported.store, query, imported.evidence)] };
+      }
+      // Ohne bekanntes Produkt nur mit GTIN – sonst kann der Supplier Scout Angebote nicht sicher zuordnen.
+      if (!candidate.gtin) return null;
+      const query: ProductQuery = {
+        productId: candidate.key,
+        title: candidate.title,
+        gtin: candidate.gtin,
+        quantity: 1,
+        destinationCountry: "DE",
+        safety: { ceRequired: assessRisk(candidate.title, candidate.category).level === "high" },
+      };
+      return { query, quotes: priceListQuotesFor(imported.store, query, imported.evidence) };
+    },
+    product: (id) => DEMO_PRODUCTS.find((p) => p.id === id),
+    analysis: (id) => analyses.get(id),
+    listing: (id) => DEMO_LISTINGS.find((l) => l.productId === id),
+  };
+}
+
+export interface MarketScoutOverview {
+  /** stored = gespeicherter Stand aus `npm run market:scan -- --save`; demo = jetzt aus der Demo-Quelle berechnet */
+  origin: "stored" | "demo";
+  candidates: StoredCandidate[];
+  lastRun: RunLogEntry | null;
+  runs: RunLogEntry[];
+  stopRequested: boolean;
+  enabled: boolean;
+  limits: { maxRequestsPerRun: number; maxCandidatesPerRun: number; maxCostEurPerRun: number };
+  errors: string[];
+}
+
+const STATE_ORDER: CandidateState[] = ["draft_created", "approved", "blocked", "deferred", "unreviewed"];
+
+/**
+ * Stand des Market Scout für das Dashboard. Ohne gespeicherten Lauf: Vorschau mit der Demo-Quelle (gekennzeichnet).
+ * Bewusst ohne aktuelle Uhrzeit: Die Vorschau rechnet mit dem festen Demo-Datum, damit die Seite vorrenderbar bleibt.
+ */
+export async function getMarketScoutOverview(now = new Date(`${DEMO_TODAY}T12:00:00Z`)): Promise<MarketScoutOverview> {
+  const loaded = loadMarketState();
+  let state = loaded.state;
+  let origin: MarketScoutOverview["origin"] = "stored";
+  if (state.runs.length === 0) {
+    origin = "demo";
+    const run = await runMarketScan({
+      ...marketEvaluationDeps(now),
+      runId: "demo-vorschau",
+      sources: [createDemoMarketSource(now)],
+      allowNetwork: false,
+      shouldStop: () => false,
+      clock: () => now,
+    });
+    state = mergeRun(emptyMarketState(), run);
+  }
+  // Echte Kandidaten vor Demo-Kandidaten, dann nach Zustand und Bewertung
+  const candidates = Object.values(state.candidates).sort(
+    (a, b) =>
+      Number(a.latest.candidate.demo) - Number(b.latest.candidate.demo) ||
+      STATE_ORDER.indexOf(a.latest.state) - STATE_ORDER.indexOf(b.latest.state) ||
+      b.latest.score.score - a.latest.score.score,
+  );
+  return {
+    origin,
+    candidates,
+    lastRun: state.runs.at(-1) ?? null,
+    runs: state.runs.slice(-5).reverse(),
+    stopRequested: isStopRequested(),
+    enabled: MARKET_SCAN.enabled,
+    limits: { maxRequestsPerRun: MARKET_SCAN.maxRequestsPerRun, maxCandidatesPerRun: MARKET_SCAN.maxCandidatesPerRun, maxCostEurPerRun: MARKET_SCAN.maxCostEurPerRun },
+    errors: loaded.error ? [loaded.error] : [],
+  };
+}
 
 export interface OrderRow {
   order: DemoOrder;

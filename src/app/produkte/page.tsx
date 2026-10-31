@@ -7,14 +7,16 @@ import { ScoreBar } from "@/components/ui/score-bar";
 import { Table, Td, Th } from "@/components/ui/table";
 import { demandLabel, DEMAND_WEIGHTS } from "@/lib/calc/demand";
 import { ASSUMPTIONS, RECOMMENDATION_RULES } from "@/lib/config/assumptions";
-import { getProductAnalyses, type Recommendation } from "@/lib/data";
+import { MarketScoutPanel } from "@/components/market/market-scout-panel";
+import { getMarketScoutOverview, getProductAnalyses, type Recommendation } from "@/lib/data";
 import { formatEur, formatPercent } from "@/lib/format";
 import { RECOMMENDATION_LABEL } from "@/lib/labels";
 
 export const metadata: Metadata = { title: "Produktanalyse" };
 
-export default function ProductsPage() {
+export default async function ProductsPage() {
   const analyses = getProductAnalyses();
+  const market = await getMarketScoutOverview();
   const count = (r: Recommendation) => analyses.filter((a) => a.recommendation === r).length;
 
   return (
@@ -30,6 +32,15 @@ export default function ProductsPage() {
           </>
         }
       />
+
+      <Card
+        title="Market Scout – automatische Produktrecherche"
+        description="Gefundene Trends, Belege, Lieferant, Marge und warum ein Kandidat gesperrt oder zurückgestellt ist. Reale Quelle: Wikipedia-Aufrufe (öffentliches Interesse, keine Verkäufe)."
+        className="mb-4"
+        flush
+      >
+        <MarketScoutPanel overview={market} />
+      </Card>
 
       <Card title="Produktübersicht" description="Nachfrage 0–100 aus Suchtrend, Social Buzz, Wettbewerb und Saison" action={<DemoBadge />} flush>
         <Table minWidth={1040}>

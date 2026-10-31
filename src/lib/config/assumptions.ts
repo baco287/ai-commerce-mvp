@@ -16,6 +16,18 @@ export const ASSUMPTIONS = {
   payoutDelayDays: 7,
 } as const;
 
+/**
+ * Umsatzsteuerlicher Status des Shops.
+ * - regelbesteuert: Verkaufspreise enthalten 19 % USt., Vorsteuer aus Einkäufen ist abziehbar (Kosten netto).
+ * - kleinunternehmer (§ 19 UStG): keine USt. auf Verkäufe, aber Vorsteuer nicht abziehbar (Kosten brutto).
+ * `confirmed: false` = noch nicht mit Steuerberatung geklärt → keine Marge gilt als verlässlich.
+ */
+export type TaxStatus = "regelbesteuert" | "kleinunternehmer";
+export const TAX_SETTINGS: Readonly<{ status: TaxStatus; confirmed: boolean }> = Object.freeze({
+  status: "regelbesteuert",
+  confirmed: false,
+});
+
 /** Mindestanforderungen an einen Lieferanten, damit er als "geeignet" gilt. */
 export const SUPPLIER_RULES = {
   maxDeliveryDays: 12,

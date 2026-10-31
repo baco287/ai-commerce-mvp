@@ -41,6 +41,7 @@ Dashboard: <http://localhost:3000>
 | `npm run typecheck` | Routentypen erzeugen + TypeScript prüfen |
 | `npm run check` | Lint, Typecheck und Tests zusammen |
 | `npm run suppliers:import -- liste.csv` | Lieferanten-Preisliste (CSV) prüfen; Übernahme in den lokalen Speicher nur mit `--apply --confirm <CODE>` – siehe [docs/LIEFERANTEN-IMPORT.md](docs/LIEFERANTEN-IMPORT.md) |
+| `npm run market:scan -- --live --save` | Market Scout: Produktthemen finden (Wikipedia-Kategorien), öffentliches Interesse messen (Wikipedia-Aufrufe, kostenlos), Kandidaten durch Supplier Scout, Profit Check, Compliance und Shopify-Dry-Run führen; ohne `--live` nur Demo, ohne `--save` nichts speichern – siehe [docs/MARKET-SCOUT.md](docs/MARKET-SCOUT.md) |
 
 ## Bereiche
 

@@ -22,10 +22,10 @@ export interface MarginBreakdown {
   marginPercent: number;
 }
 
-type MarginAssumptions = Pick<
-  Assumptions,
-  "vatRate" | "paymentFeePercent" | "paymentFeeFixed" | "adCostPerOrder" | "returnsReservePercent"
->;
+// Zahlen statt fester Literale aus ASSUMPTIONS, damit z. B. der Steuerstatus (Kleinunternehmer: 0 % USt.) übergeben werden kann.
+export type MarginAssumptions = {
+  [K in keyof Pick<Assumptions, "vatRate" | "paymentFeePercent" | "paymentFeeFixed" | "adCostPerOrder" | "returnsReservePercent">]: number;
+};
 
 /**
  * Deckungsbeitrag je Verkauf. Rechnet vom Bruttopreis aus und zieht MwSt.,
