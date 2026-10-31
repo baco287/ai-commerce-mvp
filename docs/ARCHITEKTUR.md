@@ -39,6 +39,7 @@ src/
     calc/                 Nachfrage-Score, Margen-/Preisrechnung, Lieferantenbewertung
     guards/purchase.ts    Einkaufssperre (Zahlung + Finanzierung + Limits)
     shopify/              Shopify-Produktanlage: productSet-Eingabe, Guards, Dry-Run-Abgleich, CSV-Export
+    suppliers/            Supplier Scout: Lieferanten-Adapter, Eignung, Finanzierung, Bewertung (docs/SUPPLIER-AGENT.md)
     config/               Annahmen, Budget, Sicherheitsschalter, Freigaberegeln
     demo/                 Gekennzeichnete Demodaten (deterministisch)
 ```
@@ -56,6 +57,23 @@ angebunden werden, ändert sich nur diese Schicht, nicht die Oberfläche.
 - **Deckungsbeitrag:** Nettopreis − Warenkosten − Zahlungsgebühr − Werbekosten je Verkauf −
   Retourenreserve. Die Annahmen stehen in `src/lib/config/assumptions.ts` und sind Platzhalter.
 - **Empfehlung:** Kandidat (Marge ≥ 20 % und Nachfrage ≥ 65), Beobachten (Marge ≥ 10 %), sonst Verwerfen.
+
+## Supplier Scout
+
+`src/lib/suppliers/` ist das neue, ausführlichere Lieferantenmodell. Jede Angabe sagt, ob sie
+bestätigt, nur behauptet oder fehlend ist. Der Scout schließt Angebote mit unklarer Produktidentität,
+unklarer Produktsicherheit (CE, GPSR), ohne bestätigten Direktversand oder mit Vorratskauf aus,
+kennzeichnet Vorfinanzierung und empfiehlt den günstigsten, schnellsten und insgesamt besten
+geeigneten Lieferanten mit Begründung. Details: [SUPPLIER-AGENT.md](SUPPLIER-AGENT.md).
+
+- **Übergangsphase:** Dashboard und Shopify-Pipeline nutzen noch das alte Modell
+  (`SupplierOffer`, `calc/suppliers.ts`, `demo/suppliers.ts`). Die Umstellung folgt schrittweise.
+- **Einkaufssperre:** Ein Zahlungsziel aus dem Scout wird über `toPurchaseGuardTerms`
+  (`suppliers/purchase-bridge.ts`) übergeben. Demo-Angebote, ausgeschlossene Angebote (z. B. unklare
+  CE-/GPSR-Angaben) sowie unbestätigte, ungültige oder an eine Gewerbeprüfung geknüpfte Zahlungsziele
+  werden dabei zu „Vorkasse“, bestätigte auf die nächstkleinere Stufe abgerundet. Der Scout selbst ruft
+  die Einkaufssperre nie auf – eine Empfehlung ist keine Einkaufsfreigabe.
+- **Bestände:** Lieferantenbestand (Scout) und Shopify-Bestand (`shopify/inventory.ts`) bleiben getrennt.
 
 ## Einkaufssperre
 
@@ -86,6 +104,7 @@ im Dev-Server) und werden als fertiges HTML ausgeliefert; der Browser rechnet ni
 | Kennzahlen, Tagesverlauf, Bestellliste | `src/lib/data.ts` | ja |
 | Shopify: Produkte lesen (echte Daten, nur `read_products`) und mit Soll vergleichen | `src/lib/shopify/server/`, `reconcile.ts` | ja |
 | Pipeline zur Produktanlage (nur Dry-Run, sendet nichts) | `src/lib/shopify/pipeline.ts` | ja |
+| Supplier Scout: Eignung, Vorfinanzierung, Bewertung, Empfehlungen | `src/lib/suppliers/` | ja |
 
 Die **Logik** ist echt – die **Eingangsdaten** sind es nicht (siehe unten).
 
@@ -94,7 +113,7 @@ Die **Logik** ist echt – die **Eingangsdaten** sind es nicht (siehe unten).
 | Bereich | Details |
 | --- | --- |
 | Produkte, Nachfragesignale | fiktiv, `src/lib/demo/products.ts` |
-| Lieferanten und Angebote | fiktive Firmen mit „(Demo)“, `src/lib/demo/suppliers.ts` |
+| Lieferanten und Angebote | fiktive Firmen mit „(Demo)“, `src/lib/demo/suppliers.ts` und `src/lib/suppliers/demo/` |
 | Bestellungen, Umsätze, Zahlungsstatus | deterministisch erzeugt (fester Seed), `src/lib/demo/orders.ts` |
 | Agentenläufe, Aktivitäten, Warnungen, Freigabeanfragen | statische Demodaten, keine KI-API-Aufrufe |
 | Kalkulationsannahmen | Platzhalter (Zahlungsgebühr, Werbekosten, Retouren, Auszahlungsdauer) |
