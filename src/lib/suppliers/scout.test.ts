@@ -87,6 +87,21 @@ describe("Adapter-Sicherheit", () => {
     expect(adapterBlockReason({ id: "d", name: "D", kind: "demo", paid: false, network: false })).toBeNull();
   });
 
+  it("lässt sich über eine übergebene Richtlinie nicht am globalen Schalter vorbei freischalten", async () => {
+    expect(Object.isFrozen(DEFAULT_ADAPTER_POLICY)).toBe(true);
+    const permissive = { paidApiCallsEnabled: true, networkAllowed: false };
+    expect(adapterBlockReason({ id: "p", name: "P", kind: "api", paid: true, network: false }, permissive)).toMatch(/kostenpflichtig/);
+
+    let called = 0;
+    const paid = fake({ id: "paid", name: "Bezahl-API", paid: true }, async () => {
+      called++;
+      return [];
+    });
+    const r = await scoutSuppliers(DEMO_QUERIES["p-led"], [paid], { policy: { paidApiCallsEnabled: true, networkAllowed: true } });
+    expect(called).toBe(0);
+    expect(r.adapters).toMatchObject([{ adapterId: "paid", status: "blocked" }]);
+  });
+
   it("fängt Adapterfehler ab und wertet die übrigen Quellen aus", async () => {
     const broken = fake({ id: "broken", name: "Defekt" }, async () => {
       throw new Error("Zeitüberschreitung");
@@ -120,6 +135,8 @@ describe("Adapter-Sicherheit", () => {
     for (const f of files(__dirname)) {
       const src = readFileSync(f, "utf8");
       expect(src, f).not.toMatch(/\bfetch\b|XMLHttpRequest|process\.env|\b(placeOrder|createOrder|submitOrder|purchase|pay)\s*\(/);
+      // Der Scout empfiehlt nur. Die Einkaufssperre ruft er nie selbst auf, und Schalter verändert er nicht.
+      expect(src, f).not.toMatch(/\bevaluateAutoPurchase\b|SAFETY_SWITCHES\s*\.\s*\w+\s*=[^=]|\bdefineProperty\b/);
     }
   });
 });

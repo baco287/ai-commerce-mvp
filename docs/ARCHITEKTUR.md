@@ -69,8 +69,10 @@ geeigneten Lieferanten mit Begründung. Details: [SUPPLIER-AGENT.md](SUPPLIER-AG
 - **Übergangsphase:** Dashboard und Shopify-Pipeline nutzen noch das alte Modell
   (`SupplierOffer`, `calc/suppliers.ts`, `demo/suppliers.ts`). Die Umstellung folgt schrittweise.
 - **Einkaufssperre:** Ein Zahlungsziel aus dem Scout wird über `toPurchaseGuardTerms`
-  (`suppliers/purchase-bridge.ts`) übergeben. Unbestätigte oder noch nicht nutzbare Zahlungsziele
-  werden dabei zu „Vorkasse“, bestätigte auf die nächstkleinere Stufe abgerundet.
+  (`suppliers/purchase-bridge.ts`) übergeben. Demo-Angebote, ausgeschlossene Angebote (z. B. unklare
+  CE-/GPSR-Angaben) sowie unbestätigte, ungültige oder an eine Gewerbeprüfung geknüpfte Zahlungsziele
+  werden dabei zu „Vorkasse“, bestätigte auf die nächstkleinere Stufe abgerundet. Der Scout selbst ruft
+  die Einkaufssperre nie auf – eine Empfehlung ist keine Einkaufsfreigabe.
 - **Bestände:** Lieferantenbestand (Scout) und Shopify-Bestand (`shopify/inventory.ts`) bleiben getrennt.
 
 ## Einkaufssperre

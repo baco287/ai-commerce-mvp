@@ -98,12 +98,13 @@ unbestätigtes Zahlungsziel, unklar ob das Zahlungsziel eine Gewerbe-/USt-Prüfu
 
 | Status | Vorfinanzierung | Wann |
 | --- | --- | --- |
-| `payment_terms_confirmed` | nein | Bestätigtes Zahlungsziel ≥ 7 Tage (Auszahlungsdauer) |
+| `payment_terms_confirmed` | nein | Bestätigtes Zahlungsziel ≥ 7 Tage (Auszahlungsdauer) **und** bestätigt, dass keine Gewerbe-/USt-Prüfung nötig ist |
 | `payment_terms_too_short` | ja (teilweise) | Bestätigtes Zahlungsziel < 7 Tage |
 | `payment_terms_unconfirmed` | ja | Zahlungsziel nur behauptet – gilt bis zur Bestätigung als Vorkasse |
 | `payment_terms_pending_verification` | ja | Zahlungsziel gilt erst nach Gewerbe-/USt-Prüfung (auch wenn das nur behauptet ist) |
+| `payment_terms_conditions_unclear` | ja | Nicht bestätigt, ob eine Gewerbe-/USt-Prüfung nötig ist (fehlt oder nur behauptet „nein") |
 | `prepayment_required` | ja | Vorkasse |
-| `unknown` | ja | Keine Angabe |
+| `unknown` | ja | Keine Angabe oder ungültige Tage (nur ganze Zahlen ≥ 0; kein NaN, Unendlich, Text, Bruch) |
 
 Sind alle geeigneten Angebote vorfinanzierungspflichtig, steht im Bericht der Hinweis, vor einem Einkauf
 ein Zahlungsziel zu verhandeln.
@@ -111,16 +112,22 @@ ein Zahlungsziel zu verhandeln.
 ### Übergabe an die Einkaufssperre
 
 Die Einkaufssperre (`evaluateAutoPurchase`) kennt nur die festen Stufen `vorkasse`, `netto14` und `netto30`.
-`toPurchaseGuardTerms(assessFinancing(quote))` rechnet konservativ um:
+Sie weiß nichts über Produktsicherheit, Identität oder Demo-Daten. `toPurchaseGuardTerms(evaluateQuote(quote, query))`
+bekommt deshalb das ganze Prüfergebnis eines Angebots und rechnet konservativ um:
 
 | Scout | An die Einkaufssperre |
 | --- | --- |
-| Bestätigt, 30 Tage oder mehr | `netto30` |
-| Bestätigt, 14–29 Tage | `netto14` |
+| Demo-Angebot (`quote.demo`) | `vorkasse` |
+| Ausgeschlossenes Angebot (z. B. CE/GPSR unklar, Identität unbestätigt, Vorratskauf) | `vorkasse` |
+| Bestätigt und sofort nutzbar, 30 Tage oder mehr | `netto30` |
+| Bestätigt und sofort nutzbar, 14–29 Tage | `netto14` |
 | Bestätigt, unter 14 Tage | `vorkasse` (abgerundet) |
-| Vorkasse, unbestätigt, fehlend, Gewerbeprüfung ausstehend | `vorkasse` |
+| Vorkasse, unbestätigt, fehlend, ungültig, Gewerbeprüfung ausstehend oder unklar | `vorkasse` |
 
-Damit kann ein nur behauptetes Zahlungsziel die Finanzierungsprüfung der Einkaufssperre nie erfüllen.
+Damit können unbekannte Compliance-Angaben, Demo-Daten und unbestätigte oder an Bedingungen geknüpfte
+Zahlungsziele die Finanzierungsprüfung der Einkaufssperre nie erfüllen. Eine Empfehlung des Scouts ist nie
+eine Einkaufsfreigabe: Der Scout ruft die Einkaufssperre nicht auf (per Test abgesichert), und die Sperre
+bleibt über `SAFETY_SWITCHES.autoPurchaseEnabled` global aus.
 
 ## Bewertung
 
@@ -195,7 +202,8 @@ Regeln für echte Adapter:
    Sicherheitstest (`src/lib/guards/safety.test.ts`, `NETWORK_ALLOWED`) bewusst eingetragen werden; Zugangsdaten
    nur über eine Konfigurationsdatei, die dort in `ENV_ALLOWED` steht.
 4. **Kostenpflichtige Quellen** setzen `paid: true` – der Scout fragt sie nicht ab, solange
-   `SAFETY_SWITCHES.paidApiCallsEnabled` aus ist.
+   `SAFETY_SWITCHES.paidApiCallsEnabled` aus ist. Eine beim Aufruf übergebene `policy` kann nur zusätzlich
+   einschränken und diesen Schalter nie aushebeln.
 5. **Beträge netto in EUR je Stück**, Versand bis zum Endkunden in DE. Fremdwährungen rechnet der Adapter um und
    markiert den Preis dann als `unconfirmed`, falls der Kurs nicht fest vereinbart ist.
 6. **Fehler werfen ist erlaubt** – der Scout fängt sie ab, protokolliert sie im Bericht und wertet die übrigen Quellen aus.

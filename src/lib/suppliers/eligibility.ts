@@ -2,6 +2,7 @@
 // Ausschlüsse sind harte Gründe (Angebot wird nicht bewertet), Hinweise sind offene Punkte,
 // die vor einer Freigabe geklärt werden müssen und die Bewertung leicht mindern.
 
+import { isValidTermDays } from "./financing";
 import { EU_COUNTRIES, factValue, isConfirmed, type Fact, type ProductQuery, type SupplierQuote } from "./model";
 import { SCOUT_RULES, type ScoutRules } from "./rules";
 
@@ -176,12 +177,16 @@ export function checkEligibility(q: SupplierQuote, query: ProductQuery, rules: S
   } else if (q.payment.terms.status === "unconfirmed") {
     warn("payment_terms_unconfirmed", "Zahlungsziel nur unbestätigt – bis zur Bestätigung gilt Vorfinanzierung.");
   }
-  if (factValue(q.payment.terms)?.kind === "net_terms") {
-    const verification = factValue(q.payment.requiresBusinessVerification);
-    if (verification === undefined) {
-      warn("business_verification_unknown", "Unklar, ob das Zahlungsziel eine Gewerbe-/USt-Prüfung voraussetzt.");
-    } else if (verification) {
+  const terms = factValue(q.payment.terms);
+  if (terms?.kind === "net_terms") {
+    if (!isValidTermDays(terms.days)) {
+      warn("payment_terms_invalid", "Zahlungsziel ungültig – Vorfinanzierung wird angenommen.");
+    }
+    const verification = q.payment.requiresBusinessVerification;
+    if (factValue(verification) === true) {
       warn("payment_terms_pending_verification", "Zahlungsziel erst nach Gewerbe-/USt-Prüfung.");
+    } else if (!isConfirmed(verification, (v) => v === false)) {
+      warn("payment_terms_conditions_unclear", "Nicht bestätigt, ob das Zahlungsziel eine Gewerbe-/USt-Prüfung voraussetzt.");
     }
   }
 

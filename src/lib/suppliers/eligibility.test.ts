@@ -128,7 +128,9 @@ describe("Eignungsprüfung", () => {
   it("vermerkt fehlende Musterprüfung und unklare Voraussetzungen für das Zahlungsziel", () => {
     expect(warnings({ reliability: { sampleTested: missing() } })).toEqual(["sample_not_tested"]);
     expect(warnings({ reliability: { sampleTested: ok(false) } })).toEqual(["sample_not_tested"]);
-    expect(warnings({ payment: { requiresBusinessVerification: missing() } })).toEqual(["business_verification_unknown"]);
+    expect(warnings({ payment: { requiresBusinessVerification: missing() } })).toEqual(["payment_terms_conditions_unclear"]);
+    expect(warnings({ payment: { requiresBusinessVerification: said(false) } })).toEqual(["payment_terms_conditions_unclear"]);
+    expect(warnings({ payment: { terms: ok({ kind: "net_terms", days: NaN }) } })).toEqual(["payment_terms_invalid"]);
     expect(warnings({ payment: { requiresBusinessVerification: ok(true) } })).toEqual(["payment_terms_pending_verification"]);
     // Bei Vorkasse spielt die Gewerbeprüfung keine Rolle
     expect(warnings({ payment: { terms: ok({ kind: "prepayment" }), requiresBusinessVerification: missing() } })).toEqual([]);
@@ -184,5 +186,30 @@ describe("Finanzierung", () => {
     expect(fin({ terms: ok({ kind: "net_terms", days: 30 }), requiresBusinessVerification: said(true) })).toMatchObject({
       status: "payment_terms_pending_verification",
     });
+  });
+
+  it("behandelt eine unbekannte oder nur behauptete Befreiung von der Gewerbeprüfung als Vorfinanzierung", () => {
+    for (const rbv of [missing<boolean>(), said(false)]) {
+      expect(fin({ terms: ok({ kind: "net_terms", days: 30 }), requiresBusinessVerification: rbv })).toMatchObject({
+        status: "payment_terms_conditions_unclear",
+        termDays: 30,
+        requiresPrefinancing: true,
+      });
+    }
+    expect(fin({ terms: ok({ kind: "net_terms", days: 30 }), requiresBusinessVerification: ok(false) })).toMatchObject({
+      status: "payment_terms_confirmed",
+      requiresPrefinancing: false,
+    });
+  });
+
+  it("weist ungültige Zahlungsziel-Tage ab", () => {
+    for (const days of [NaN, Infinity, -5, 10.5, "30" as unknown as number]) {
+      expect(fin({ terms: ok({ kind: "net_terms", days }) }), String(days)).toEqual({
+        status: "unknown",
+        termDays: null,
+        requiresPrefinancing: true,
+        label: "Zahlungsziel ungültig – Vorfinanzierung angenommen",
+      });
+    }
   });
 });

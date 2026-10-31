@@ -28,20 +28,27 @@ export interface SupplierAdapter {
   findQuotes(query: ProductQuery): Promise<SupplierQuote[]>;
 }
 
+/**
+ * Richtlinie je Scout-Lauf. Sie kann nur ZUSÄTZLICH einschränken: Kostenpflichtige Adapter brauchen
+ * immer auch den globalen Schalter SAFETY_SWITCHES.paidApiCallsEnabled – eine Richtlinie allein
+ * schaltet sie nie frei.
+ */
 export interface AdapterPolicy {
   paidApiCallsEnabled: boolean;
   /** Netzwerk-Adapter zulassen. Es gibt dafür bewusst keinen globalen Schalter – Standard ist aus. */
   networkAllowed: boolean;
 }
 
-export const DEFAULT_ADAPTER_POLICY: AdapterPolicy = {
+export const DEFAULT_ADAPTER_POLICY: Readonly<AdapterPolicy> = Object.freeze({
   paidApiCallsEnabled: SAFETY_SWITCHES.paidApiCallsEnabled,
   networkAllowed: false,
-};
+});
 
 /** Grund, warum ein Adapter nicht abgefragt werden darf – oder null, wenn er erlaubt ist. */
 export function adapterBlockReason(info: SupplierAdapterInfo, policy: AdapterPolicy = DEFAULT_ADAPTER_POLICY): string | null {
-  if (info.paid && !policy.paidApiCallsEnabled) {
+  // Der globale Schalter wird hier direkt geprüft, nicht über die übergebene Richtlinie.
+  const paidAllowed = SAFETY_SWITCHES.paidApiCallsEnabled && policy.paidApiCallsEnabled;
+  if (info.paid && !paidAllowed) {
     return `Adapter „${info.name}“ ist kostenpflichtig; kostenpflichtige API-Aufrufe sind gesperrt.`;
   }
   if (info.network && !policy.networkAllowed) {

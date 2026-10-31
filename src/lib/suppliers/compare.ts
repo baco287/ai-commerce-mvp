@@ -56,7 +56,8 @@ const pct = (v: number) => `${Math.round(v * 100)} %`;
 const points = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 });
 const pts = (v: number) => points.format(v);
 
-function evaluate(q: SupplierQuote, query: ProductQuery, rules: ScoutRules): QuoteEvaluation {
+/** Eignung, Finanzierung und Kosten eines einzelnen Angebots (ohne Punktbewertung). */
+export function evaluateQuote(q: SupplierQuote, query: ProductQuery, rules: ScoutRules = SCOUT_RULES): QuoteEvaluation {
   return {
     quote: q,
     eligibility: checkEligibility(q, query, rules),
@@ -128,7 +129,7 @@ function bestReasons(e: Scored, sorted: Scored[], others: { cheapest: Scored; fa
 }
 
 export function compareQuotes(query: ProductQuery, quotes: SupplierQuote[], rules: ScoutRules = SCOUT_RULES): SupplierComparison {
-  const evaluations = quotes.map((q) => evaluate(q, query, rules));
+  const evaluations = quotes.map((q) => evaluateQuote(q, query, rules));
   // Geeignet heißt auch: Kosten und Lieferzeit sind bekannt (sonst greift ein Ausschluss).
   const candidates = evaluations.flatMap((e) =>
     e.eligibility.eligible && e.cost && e.deliveryDays ? [{ ...e, cost: e.cost, deliveryDays: e.deliveryDays }] : [],
