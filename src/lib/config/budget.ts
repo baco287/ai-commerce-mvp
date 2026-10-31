@@ -43,6 +43,20 @@ export const BUDGET = {
   ],
 } as const;
 
+/**
+ * Mittel für eine mögliche Vorfinanzierung von Lieferanteneinkäufen.
+ * `verified: false` = Planwert ohne Kontonachweis – dann gilt keine Vorfinanzierung als gesichert.
+ * Erst ein belegter Kontostand (Quelle + Datum) darf `verified: true` setzen – per Code-Änderung mit Review.
+ */
+export const FUNDING = {
+  /** Verfügbare Mittel in EUR (heute: Startbudget minus Ausgaben, nicht belegt) */
+  availableFunds: BUDGET.total - BUDGET.spent,
+  verified: false,
+  source: "Startbudget laut Planung – kein Kontonachweis",
+  /** Sicherheitsreserve in EUR, die nie für Einkäufe eingeplant wird */
+  safetyReserve: BUDGET.plannedAllocation.find((a) => a.key === "reserve")?.amount ?? 0,
+} as const;
+
 /** Grenzwerte für spätere automatisierte Aktionen (gelten erst, wenn die Schalter oben aktiv sind). */
 export const LIMITS = {
   /** Maximaler Lieferanteneinkauf je Bestellung ohne manuelle Freigabe */

@@ -5,7 +5,7 @@ import { Badge, DemoBadge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { SAFETY_SWITCHES } from "@/lib/config/budget";
-import { getSupplierLinks, getSupplierScoutReports } from "@/lib/data";
+import { getSupplierImportStatus, getSupplierLinks, getSupplierScoutReports } from "@/lib/data";
 import { formatRating } from "@/lib/format";
 import { buildSupplierView, SCOUT_RULES } from "@/lib/suppliers";
 
@@ -17,15 +17,19 @@ export default async function SuppliersPage() {
     buildSupplierView(product, report, { adapters: report.adapters, containsDemoData: report.containsDemoData }),
   );
   const links = new Map(getSupplierLinks().map((l) => [l.productId, l]));
-  const totalOffers = views.reduce((s, v) => s + v.eligible.length + v.excluded.length, 0);
+  const allOffers = views.flatMap((v) => [...v.eligible, ...v.excluded]);
+  const totalOffers = allOffers.length;
+  // Angebote aus echten (nicht synthetischen) Preislisten – nie als Demo-Daten ausgeben
+  const realOffers = allOffers.filter((o) => !o.demo).length;
   const adapters = reports[0]?.report.adapters ?? [];
+  const imported = getSupplierImportStatus();
 
   return (
     <>
       <PageHeader
         title="Lieferanten (Supplier Scout)"
-        description={`${totalOffers} Angebote fiktiver Lieferanten für ${views.length} Produkte – geprüft auf Produktidentität, Sicherheit, Dropshipping, Lieferfähigkeit und Finanzierung. Je Produkt: günstigster, schnellster und insgesamt bester geeigneter Lieferant.`}
-        actions={<DemoBadge label="Fiktive Lieferanten" />}
+        description={`${totalOffers} Angebote ${realOffers ? `(davon ${realOffers} aus echten Preislisten, Rest Demo-/Testdaten)` : "fiktiver Lieferanten"} für ${views.length} Produkte – geprüft auf Produktidentität, Sicherheit, Dropshipping, Lieferfähigkeit und Finanzierung. Je Produkt: günstigster, schnellster und insgesamt bester geeigneter Lieferant.`}
+        actions={<DemoBadge label={realOffers ? "Demo + echte Preislisten" : "Fiktive Lieferanten"} />}
       />
 
       <section
@@ -36,14 +40,19 @@ export default async function SuppliersPage() {
         <div className="min-w-0">
           <p className="font-semibold">Empfehlung ist keine Einkaufsfreigabe</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-amber-100/90">
-            <li>Alle Lieferanten und Werte sind Demo-Daten – keine echten Firmen, Preise oder Konditionen.</li>
+            <li>
+              {realOffers
+                ? `${realOffers} Angebote stammen aus echten Preislisten (gekennzeichnet); alle übrigen sind Demo- oder Testdaten – keine echten Firmen, Preise oder Konditionen.`
+                : "Alle Lieferanten und Werte sind Demo- oder Testdaten – keine echten Firmen, Preise oder Konditionen."}
+            </li>
             <li>
               Es gibt hier keine Bestellungen. Automatischer Einkauf ist gesperrt
               {SAFETY_SWITCHES.autoPurchaseEnabled ? "" : " (Sicherheitsschalter aus)"}; Demo-Angebote gelten für die
               Einkaufssperre immer als Vorkasse.
             </li>
             <li>Shopify wird von dieser Seite weder gelesen noch geändert – keine Preise, keine Veröffentlichung.</li>
-            <li>Vor jeder Freigabe: fehlende Nachweise, unbestätigte Angaben und die Finanzierung klären.</li>
+            <li>Vor jeder Freigabe: fehlende Nachweise, unbestätigte Angaben und die Finanzierung klären. Ein hoher Score gibt nichts frei.</li>
+            <li>Angaben aus Preislisten gelten als „vom Lieferanten angegeben“ – CE, GPSR und Lieferfähigkeit erst mit unabhängigem Nachweis.</li>
           </ul>
         </div>
       </section>
@@ -85,13 +94,31 @@ export default async function SuppliersPage() {
 
       <Card className="mt-4" title="Datenquellen" description="Schnittstelle für spätere echte Lieferanten (docs/SUPPLIER-AGENT.md)">
         <ul className="space-y-2 text-xs">
+          <li className="rounded-lg border border-line px-3 py-2 text-muted">
+            <p className="flex flex-wrap items-center justify-between gap-2">
+              <span className="flex items-center gap-1.5 text-fg">
+                <Cable className="size-3.5 text-subtle" aria-hidden /> Importierte Preislisten (lokal, .data/suppliers)
+              </span>
+              <Badge tone={imported.offers ? "blue" : "neutral"}>{imported.offers} Angebote</Badge>
+            </p>
+            <p className="mt-1">
+              {imported.offers === 0
+                ? "Noch nichts importiert – Import per „npm run suppliers:import“ (Testlauf), siehe docs/LIEFERANTEN-IMPORT.md."
+                : `davon ${imported.synthetic} Testdaten, ${imported.unassigned} ohne Produktzuordnung · ${imported.evidenceEntries} Nachweise${imported.lastImport ? ` · letzter Import ${imported.lastImport.importedAt.slice(0, 10)} (${imported.lastImport.file})` : ""}`}
+            </p>
+            {imported.errors.map((e) => (
+              <p key={e} className="mt-1 text-amber-200">
+                {e}
+              </p>
+            ))}
+          </li>
           {adapters.map((a) => (
             <li key={a.adapterId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line px-3 py-2">
               <span className="flex items-center gap-1.5 text-fg">
                 <Cable className="size-3.5 text-subtle" aria-hidden /> {a.adapterName}
               </span>
               <Badge tone={a.status === "ok" ? "green" : a.status === "blocked" ? "amber" : "red"}>
-                {a.status === "ok" ? "Demo-Quelle aktiv" : a.status === "blocked" ? "gesperrt" : "Fehler"}
+                {a.status === "ok" ? (a.adapterId.startsWith("demo") ? "Demo-Quelle aktiv" : `lokale Quelle aktiv (${a.quoteCount} Angebote)`) : a.status === "blocked" ? "gesperrt" : "Fehler"}
               </Badge>
             </li>
           ))}

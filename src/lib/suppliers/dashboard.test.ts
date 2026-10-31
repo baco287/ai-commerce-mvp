@@ -99,11 +99,14 @@ describe("Lieferanten-Seite: Sicherheitskennzeichnung", () => {
     ]);
   });
 
-  it("weist bestätigte, unbestätigte und fehlende Angaben getrennt aus", () => {
+  it("weist geprüfte, vom Lieferanten angegebene, unbestätigte und fehlende Angaben getrennt aus", () => {
     const homegoods = offerOf("p-cable", "homegoods");
-    expect(homegoods.facts.unconfirmed).toEqual(expect.arrayContaining(["Importkosten", "Sendungsverfolgung", "Neutraler Versand"]));
+    // Demo-Selbstauskünfte sind „vom Lieferanten angegeben“ – nicht geprüft
+    expect(homegoods.facts.supplierStated).toEqual(expect.arrayContaining(["Importkosten", "Sendungsverfolgung", "Neutraler Versand"]));
+    expect(homegoods.facts.verified).toEqual(expect.arrayContaining(["Einkaufspreis", "Versandkosten"]));
     expect(homegoods.facts.missing).toContain("Geprüftes Muster");
-    expect(homegoods.importCost).toEqual({ value: 0.4, status: "unconfirmed" });
+    expect(homegoods.importCost).toEqual({ value: 0.4, status: "unconfirmed", level: "supplier_stated" });
+    expect(homegoods.source).toBe("demo");
   });
 
   it("nennt für jedes ausgeschlossene Angebot mindestens einen Grund", () => {

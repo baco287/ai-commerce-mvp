@@ -17,7 +17,11 @@ export type ExclusionCode =
   | "delivery_too_slow"
   | "stock_purchase_required"
   | "cost_unknown"
-  | "rating_too_low";
+  | "rating_too_low"
+  /** Importierte Preisliste: Kosten oder Lieferfähigkeit nur vom Lieferanten angegeben, nicht nachgewiesen */
+  | "price_list_unverified"
+  /** Importierte Preisliste: Angebot fehlt in der aktuellen Liste des Lieferanten */
+  | "price_list_outdated";
 
 export interface Finding<C extends string = string> {
   code: C;
@@ -150,6 +154,17 @@ export function checkEligibility(q: SupplierQuote, query: ProductQuery, rules: S
   } else if (moq > query.quantity) {
     exclude("stock_purchase_required", `Mindestabnahme ${moq} Stück – wäre ein Vorratskauf.`);
   }
+  // Mindestbestellwert: muss mit dem Warenwert einer einzelnen Kundenbestellung erreicht werden.
+  const mov = factValue(q.pricing.minOrderValue);
+  const unitPrice = factValue(q.pricing.unitPrice);
+  if (mov === undefined) {
+    warn("mov_missing", "Mindestbestellwert unbekannt – vor Freigabe klären (kein Vorratskauf).");
+  } else if (unitPrice !== undefined && mov > round2(unitPrice * query.quantity)) {
+    exclude(
+      "stock_purchase_required",
+      `Mindestbestellwert ${mov.toFixed(2).replace(".", ",")} € über dem Warenwert einer Kundenbestellung (${round2(unitPrice * query.quantity).toFixed(2).replace(".", ",")} €) – wäre ein Vorratskauf.`,
+    );
+  }
 
   // --- Kosten ----------------------------------------------------------------
   const p = q.pricing;
@@ -157,6 +172,31 @@ export function checkEligibility(q: SupplierQuote, query: ProductQuery, rules: S
   if (p.shippingCost.status === "missing") exclude("cost_unknown", "Versandkosten nach DE fehlen.");
   if (p.importCost.status === "missing" && !shipsFromEu(q)) {
     exclude("cost_unknown", "Importkosten fehlen (Versand von außerhalb der EU).");
+  }
+  // Importierte Preislisten: Eine Selbstauskunft darf nie Kalkulationsbasis (Shopify-Kosten) oder Empfehlung werden.
+  // Kosten und Lieferfähigkeit müssen per Nachweis geprüft sein (siehe import/evidence.ts).
+  if (q.provenance?.kind === "price_list") {
+    if (q.provenance.outdated) {
+      exclude("price_list_outdated", "Nicht in der aktuellen Preisliste des Lieferanten (fehlt dort oder wurde abgelehnt) – keine Kalkulationsgrundlage.");
+    }
+    // Versandland entscheidet über Importkosten (EU = 0 €) – daher ebenfalls nur mit Nachweis; außerhalb der EU
+    // müssen zusätzlich die Importkosten belegt sein.
+    const unproven = (
+      [
+        ["Einkaufspreis", p.unitPrice],
+        ["Versandkosten", p.shippingCost],
+        ["Versandland", q.fulfillment.shipsFrom],
+        ...(shipsFromEu(q) ? [] : ([["Importkosten", p.importCost]] as const)),
+        ["Lieferung nach DE", q.fulfillment.deliversToDestination],
+        ["Lieferzeit", q.fulfillment.deliveryDays],
+        ["Lieferantenbestand", q.fulfillment.stock],
+      ] as const
+    )
+      .filter(([, f]) => f.status !== "confirmed")
+      .map(([label]) => label);
+    if (unproven.length) {
+      exclude("price_list_unverified", `Preisliste ohne Nachweis für ${unproven.join(", ")} – nur Lieferantenangabe, keine Kalkulationsgrundlage.`);
+    }
   }
   if (p.unitPrice.status === "unconfirmed") warn("price_unconfirmed", "Einkaufspreis nur unbestätigt.");
   if (p.shippingCost.status === "unconfirmed") warn("shipping_unconfirmed", "Versandkosten nur unbestätigt.");

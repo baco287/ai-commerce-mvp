@@ -1,0 +1,14 @@
+{
+  "columns": {
+    "Art.-Nr. Lief.": "supplierSku",
+    "Preis Händler": "unitPrice",
+    "Fracht DE": "shippingCostDe",
+    "Herkunft": "shipsFrom",
+    "LZ": "deliveryDays"
+  },
+  "defaults": {
+    "supplierName": "Alpenhandel Test (synthetisch)",
+    "currency": "EUR",
+    "dataSource": "Preisliste per E-Mail (synthetisch)"
+  }
+}

@@ -12,6 +12,7 @@ import {
   Gauge,
   Link2,
   Lock,
+  MessageSquareQuote,
   PackageX,
   PiggyBank,
   Truck,
@@ -23,8 +24,7 @@ import { Badge, DemoBadge, type BadgeTone } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { formatDays, formatEur, formatPercent } from "@/lib/format";
 import { PAYMENT_TERMS_LABEL } from "@/lib/labels";
-import type { FactCell, Flag, FlagKind, OfferView, ProductSupplierView, RecommendationView, SupplierProductLink } from "@/lib/suppliers";
-import type { FactStatus } from "@/lib/suppliers";
+import { SOURCE_LABELS, type FactCell, type FactLevel, type Flag, type FlagKind, type OfferView, type ProductSupplierView, type RecommendationView, type SourceStatus, type SupplierProductLink } from "@/lib/suppliers";
 
 const FLAG_STYLE: Record<FlagKind, { tone: BadgeTone; icon: typeof Lock }> = {
   demo: { tone: "amber", icon: FlaskConical },
@@ -36,17 +36,39 @@ const FLAG_STYLE: Record<FlagKind, { tone: BadgeTone; icon: typeof Lock }> = {
 
 const RECOMMENDATION_ICON = { cheapest: PiggyBank, fastest: Zap, best: Award } as const;
 
-const STATUS_LABEL: Record<FactStatus, string> = { confirmed: "bestätigt", unconfirmed: "unbestätigt", missing: "fehlt" };
+const LEVEL_LABEL: Record<FactLevel, string> = {
+  verified: "geprüft (Nachweis)",
+  supplier_stated: "vom Lieferanten angegeben",
+  unconfirmed: "unbestätigt",
+  missing: "fehlt",
+};
+const LEVEL_STYLE: Record<FactLevel, { icon: typeof Lock; color: string }> = {
+  verified: { icon: CircleCheck, color: "text-emerald-400" },
+  supplier_stated: { icon: MessageSquareQuote, color: "text-sky-300" },
+  unconfirmed: { icon: CircleDashed, color: "text-amber-300" },
+  missing: { icon: CircleMinus, color: "text-rose-300" },
+};
 
-/** Kleines Symbol für den Status einer Angabe – Text steht im title und für Screenreader daneben. */
-function StatusMark({ status }: { status: FactStatus }) {
-  const Icon = status === "confirmed" ? CircleCheck : status === "unconfirmed" ? CircleDashed : CircleMinus;
-  const color = status === "confirmed" ? "text-emerald-400" : status === "unconfirmed" ? "text-amber-300" : "text-rose-300";
+/** Kleines Symbol für die Einordnung einer Angabe – Text steht im title und für Screenreader daneben. */
+function StatusMark({ level }: { level: FactLevel }) {
+  const { icon: Icon, color } = LEVEL_STYLE[level];
   return (
-    <span title={STATUS_LABEL[status]} className={`inline-flex shrink-0 ${color}`}>
+    <span title={LEVEL_LABEL[level]} className={`inline-flex shrink-0 ${color}`}>
       <Icon className="size-3.5" aria-hidden />
-      <span className="sr-only">({STATUS_LABEL[status]})</span>
+      <span className="sr-only">({LEVEL_LABEL[level]})</span>
     </span>
+  );
+}
+
+const SOURCE_TONE: Record<SourceStatus, BadgeTone> = { demo: "amber", real_unverified: "blue", real_verified: "green" };
+
+/** DEMO · ECHTE QUELLE, UNGEPRÜFT · NACHWEISE GEPRÜFT – und AUSGESCHLOSSEN, wenn nicht geeignet. */
+function SourceBadges({ offer }: { offer: OfferView }) {
+  return (
+    <>
+      <Badge tone={SOURCE_TONE[offer.source]}>{SOURCE_LABELS[offer.source]}</Badge>
+      {!offer.eligible && <Badge tone="red">AUSGESCHLOSSEN</Badge>}
+    </>
   );
 }
 
@@ -54,7 +76,7 @@ function FactValue<T>({ cell, format }: { cell: FactCell<T>; format: (v: T) => s
   return (
     <span className="inline-flex items-center gap-1 tabular-nums">
       {cell.value === undefined ? <span className="text-subtle">–</span> : format(cell.value)}
-      <StatusMark status={cell.status} />
+      <StatusMark level={cell.level} />
     </span>
   );
 }
@@ -135,7 +157,7 @@ function OfferFacts({ offer }: { offer: OfferView }) {
 }
 
 function FinancingBadge({ offer }: { offer: OfferView }) {
-  return offer.financing.requiresPrefinancing ? (
+  return offer.financing.requiresPrefinancing || offer.funding.status !== "no_prefinancing" ? (
     <Badge tone="amber">
       <Wallet className="size-3" aria-hidden /> Vorfinanzierung nötig
     </Badge>
@@ -160,6 +182,7 @@ function RecommendationCard({ rec, isBasis }: { rec: RecommendationView; isBasis
         </p>
         <p className="break-words text-sm font-semibold text-fg">{o.supplierName}</p>
         <div className="flex flex-wrap gap-1">
+          <SourceBadges offer={o} />
           {isBasis && <Badge tone="cyan">Kalkulationsbasis</Badge>}
           <FinancingBadge offer={o} />
         </div>
@@ -168,7 +191,8 @@ function RecommendationCard({ rec, isBasis }: { rec: RecommendationView; isBasis
       <FlagBadges flags={o.flags} />
       <p className="rounded-lg border border-amber-400/25 bg-amber-400/5 px-2.5 py-1.5 text-[11px] text-amber-100">
         <Lock className="mr-1 inline size-3" aria-hidden />
-        Empfehlung, keine Einkaufsfreigabe · Einkaufssperre: {PAYMENT_TERMS_LABEL[o.purchaseGuardTerms]}
+        Empfehlung, keine Einkaufsfreigabe – auch ein hoher Score gibt nichts frei · Einkaufssperre:{" "}
+        {PAYMENT_TERMS_LABEL[o.purchaseGuardTerms]}
       </p>
       <details className="group text-xs">
         <summary className="cursor-pointer select-none text-accent">Begründung und offene Punkte</summary>
@@ -177,11 +201,26 @@ function RecommendationCard({ rec, isBasis }: { rec: RecommendationView; isBasis
             <li key={r}>{r}</li>
           ))}
         </ul>
-        <div className="mt-2">
+        <div className="mt-2 space-y-2">
           <FlagDetails flags={o.flags} />
+          <FundingDetails offer={o} />
+          {o.provenanceText && <p className="break-words text-muted">Herkunft: {o.provenanceText}</p>}
         </div>
       </details>
     </article>
+  );
+}
+
+function FundingDetails({ offer }: { offer: OfferView }) {
+  return (
+    <div>
+      <p className="font-medium text-fg">Finanzierung: {offer.funding.label}</p>
+      <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted">
+        {offer.funding.details.map((d) => (
+          <li key={d}>{d}</li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -198,12 +237,14 @@ function OfferCard({ offer, isBasis }: { offer: OfferView; isBasis: boolean }) {
               <Gauge className="size-3" aria-hidden /> {offer.score.toLocaleString("de-DE", { maximumFractionDigits: 1 })} / 100
             </Badge>
           )}
-          {offer.eligible ? <FinancingBadge offer={offer} /> : <Badge tone="red">ausgeschlossen</Badge>}
+          <SourceBadges offer={offer} />
+          {offer.eligible && <FinancingBadge offer={offer} />}
         </div>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         <OfferFacts offer={offer} />
         <div className="space-y-2 text-xs">
+          {offer.provenanceText && <p className="break-words text-muted">Herkunft: {offer.provenanceText}</p>}
           {offer.exclusions.length > 0 && (
             <div>
               <p className="font-medium text-rose-200">Ausschlussgründe</p>
@@ -215,13 +256,16 @@ function OfferCard({ offer, isBasis }: { offer: OfferView; isBasis: boolean }) {
             </div>
           )}
           <p className="text-muted">
-            <span className="text-emerald-300">{offer.facts.confirmed.length} bestätigt</span> ·{" "}
+            <span className="text-emerald-300">{offer.facts.verified.length} geprüft</span> ·{" "}
+            <span className="text-sky-200">{offer.facts.supplierStated.length} vom Lieferanten angegeben</span> ·{" "}
             <span className="text-amber-200">{offer.facts.unconfirmed.length} unbestätigt</span> ·{" "}
             <span className="text-rose-200">{offer.facts.missing.length} fehlend</span>
           </p>
+          {offer.facts.supplierStated.length > 0 && <p className="text-muted">Vom Lieferanten angegeben: {offer.facts.supplierStated.join(", ")}</p>}
           {offer.facts.unconfirmed.length > 0 && <p className="text-muted">Unbestätigt: {offer.facts.unconfirmed.join(", ")}</p>}
           {offer.facts.missing.length > 0 && <p className="text-muted">Fehlend: {offer.facts.missing.join(", ")}</p>}
           <FlagBadges flags={offer.flags} />
+          <FundingDetails offer={offer} />
         </div>
       </div>
     </li>
@@ -311,10 +355,11 @@ export function ProductSuppliers({ view, link }: { view: ProductSupplierView; li
                     const open = !best || best.openDocuments.includes(d);
                     return (
                       <li key={d} className="flex items-start gap-1.5">
-                        <StatusMark status={open ? "missing" : "confirmed"} />
+                        {/* Demo-Unterlagen sind Selbstauskünfte; „geprüft“ nur bei echtem Angebot mit Nachweis */}
+                        <StatusMark level={open ? "missing" : best?.demo ? "supplier_stated" : "verified"} />
                         <span className={open ? "text-rose-200" : "text-muted"}>
                           {d}
-                          {open ? " – fehlt" : " – liegt vor (Demo)"}
+                          {open ? " – fehlt" : best?.demo ? " – liegt vor (Demo)" : " – Nachweis geprüft"}
                         </span>
                       </li>
                     );
@@ -398,13 +443,16 @@ export function StatusLegend() {
   return (
     <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
       <span className="inline-flex items-center gap-1">
-        <StatusMark status="confirmed" /> bestätigt (geprüfte Quelle)
+        <StatusMark level="verified" /> durch unabhängigen Nachweis geprüft
       </span>
       <span className="inline-flex items-center gap-1">
-        <StatusMark status="unconfirmed" /> unbestätigt (Selbstauskunft, Schätzung)
+        <StatusMark level="supplier_stated" /> vom Lieferanten angegeben (Preisliste, Selbstauskunft)
       </span>
       <span className="inline-flex items-center gap-1">
-        <StatusMark status="missing" /> fehlt
+        <StatusMark level="unconfirmed" /> unbestätigt (Schätzung)
+      </span>
+      <span className="inline-flex items-center gap-1">
+        <StatusMark level="missing" /> fehlt
       </span>
     </p>
   );

@@ -8,7 +8,9 @@ import { SAFETY_SWITCHES } from "@/lib/config/budget";
 import type { Product } from "@/lib/types";
 import type { QuoteEvaluation, RecommendationKind, SupplierComparison } from "./compare";
 import type { FinancingStatus } from "./financing";
-import { factValue, type Fact, type FactStatus, type ProductQuery } from "./model";
+import { shipsFromEu } from "./eligibility";
+import { assessFunding, type FundingAssessment } from "./funding";
+import { factLevel, factValue, type Fact, type FactLevel, type FactStatus, type ProductQuery } from "./model";
 import { toPurchaseGuardTerms } from "./purchase-bridge";
 import type { AdapterRun } from "./scout";
 
@@ -24,13 +26,27 @@ export interface Flag {
 export interface FactCell<T> {
   value: T | undefined;
   status: FactStatus;
+  /** geprüft (Nachweis) · vom Lieferanten angegeben · unbestätigt · fehlt */
+  level: FactLevel;
 }
+
+/** Herkunft eines Angebots für die Kennzeichnung. */
+export type SourceStatus = "demo" | "real_unverified" | "real_verified";
+export const SOURCE_LABELS: Record<SourceStatus, string> = {
+  demo: "DEMO",
+  real_unverified: "ECHTE QUELLE, UNGEPRÜFT",
+  real_verified: "NACHWEISE GEPRÜFT",
+};
 
 export interface OfferView {
   quoteId: string;
   supplierName: string;
   demo: boolean;
   eligible: boolean;
+  /** DEMO · ECHTE QUELLE, UNGEPRÜFT · NACHWEISE GEPRÜFT (zusätzlich „AUSGESCHLOSSEN“, wenn nicht geeignet) */
+  source: SourceStatus;
+  /** Herkunft, z. B. „Preisliste X: datei.csv, Zeile 4, Stand 2026-10-30“ */
+  provenanceText: string | null;
   shipsFrom: string | undefined;
   unitPrice: FactCell<number>;
   shippingCost: FactCell<number>;
@@ -41,13 +57,15 @@ export interface OfferView {
   deliveryDays: FactCell<{ min: number; max: number }>;
   stock: FactCell<number>;
   financing: { status: FinancingStatus; label: string; requiresPrefinancing: boolean };
+  /** Beträge, Fälligkeit und Mittel für eine Kundenbestellung */
+  funding: FundingAssessment;
   /** Zahlungsbedingung, wie sie die Einkaufssperre annehmen dürfte (Demo/ausgeschlossen = Vorkasse) */
   purchaseGuardTerms: ReturnType<typeof toPurchaseGuardTerms>;
   /** Deckungsbeitrag und Marge nach der bestehenden Kalkulation (calc/pricing.ts); null ohne Kosten */
   margin: { contribution: number; marginPercent: number } | null;
   score: number | null;
   /** Wichtige Angaben nach Status */
-  facts: { confirmed: string[]; unconfirmed: string[]; missing: string[] };
+  facts: { verified: string[]; supplierStated: string[]; unconfirmed: string[]; missing: string[] };
   /** Pflichtunterlagen des Produkts, die dieses Angebot nicht belegt */
   openDocuments: string[];
   documents: string[];
@@ -110,7 +128,7 @@ export function recommendationTitle(kinds: RecommendationKind[]): string {
   return `${words.slice(0, -1).join(", ")} & ${words[words.length - 1]} geeigneter`;
 }
 
-const cell = <T>(f: Fact<T>): FactCell<T> => ({ value: factValue(f), status: f.status });
+const cell = <T>(f: Fact<T>): FactCell<T> => ({ value: factValue(f), status: f.status, level: factLevel(f) });
 
 /** Liegt ein Pflichtdokument vor? Dokumentnamen beginnen mit der geforderten Bezeichnung. */
 const hasDocument = (documents: string[], required: string) => documents.some((d) => d.startsWith(required));
@@ -124,6 +142,7 @@ function factLists(e: QuoteEvaluation) {
     ["Versandkosten", q.pricing.shippingCost],
     ["Importkosten", q.pricing.importCost],
     ["Mindestabnahme", q.pricing.minOrderQuantity],
+    ["Mindestbestellwert", q.pricing.minOrderValue],
     ["Lieferung nach DE", q.fulfillment.deliversToDestination],
     ["Lieferzeit", q.fulfillment.deliveryDays],
     ["Lieferantenbestand", q.fulfillment.stock],
@@ -140,16 +159,19 @@ function factLists(e: QuoteEvaluation) {
     ["Reklamationsquote", q.reliability.defectRate],
     ["Geprüftes Muster", q.reliability.sampleTested],
   ];
-  const pick = (s: FactStatus) => entries.filter(([, f]) => f.status === s).map(([label]) => label);
-  return { confirmed: pick("confirmed"), unconfirmed: pick("unconfirmed"), missing: pick("missing") };
+  const pick = (l: FactLevel) => entries.filter(([, f]) => factLevel(f) === l).map(([label]) => label);
+  return { verified: pick("verified"), supplierStated: pick("supplier_stated"), unconfirmed: pick("unconfirmed"), missing: pick("missing") };
 }
 
 const notConfirmed = (f: Fact<boolean>) => !(f.status === "confirmed" && f.value === true);
 
-function flagsFor(e: QuoteEvaluation, openDocuments: string[]): Flag[] {
+function flagsFor(e: QuoteEvaluation, openDocuments: string[], funding: FundingAssessment): Flag[] {
   const q = e.quote;
   const flags: Flag[] = [];
-  if (q.demo) flags.push({ kind: "demo", label: "Demo-Daten", details: ["Fiktiver Lieferant – keine echte Einkaufsgrundlage."] });
+  if (q.demo) {
+    const synthetic = q.provenance?.synthetic;
+    flags.push({ kind: "demo", label: synthetic ? "Testdaten" : "Demo-Daten", details: [synthetic ? "Synthetische Testdaten – keine echte Einkaufsgrundlage." : "Fiktiver Lieferant – keine echte Einkaufsgrundlage."] });
+  }
 
   const evidence = [
     ...openDocuments.map((d) => `${d} fehlt`),
@@ -160,8 +182,8 @@ function flagsFor(e: QuoteEvaluation, openDocuments: string[]): Flag[] {
   ];
   if (evidence.length) flags.push({ kind: "missing_evidence", label: "Produktnachweise fehlen", details: evidence });
 
-  if (e.financing.requiresPrefinancing) {
-    flags.push({ kind: "uncertain_financing", label: "Finanzierung nicht gesichert", details: [e.financing.label] });
+  if (e.financing.requiresPrefinancing || funding.status !== "no_prefinancing") {
+    flags.push({ kind: "uncertain_financing", label: "Finanzierung nicht gesichert", details: [e.financing.label, funding.label] });
   }
 
   const delivery = [
@@ -184,8 +206,43 @@ function flagsFor(e: QuoteEvaluation, openDocuments: string[]): Flag[] {
   return flags;
 }
 
+/** Kritische Angaben, die für „NACHWEISE GEPRÜFT“ alle unabhängig geprüft sein müssen. */
+function criticalFacts(e: QuoteEvaluation, query: ProductQuery): Fact<unknown>[] {
+  const q = e.quote;
+  return [
+    q.identity.match,
+    ...(query.safety.ceRequired ? [q.safety.ceMarking] : []),
+    q.safety.euResponsiblePerson,
+    q.safety.safetyInformationDe,
+    q.dropshipping.supported,
+    q.pricing.unitPrice,
+    q.pricing.shippingCost,
+    q.fulfillment.shipsFrom,
+    ...(shipsFromEu(q) ? [] : [q.pricing.importCost]),
+    q.fulfillment.deliversToDestination,
+    q.fulfillment.deliveryDays,
+    q.fulfillment.stock,
+    q.payment.terms,
+  ];
+}
+
+function sourceOf(e: QuoteEvaluation, query: ProductQuery, openDocuments: string[]): SourceStatus {
+  if (e.quote.demo) return "demo";
+  const allVerified = criticalFacts(e, query).every((f) => f.status === "confirmed") && openDocuments.length === 0;
+  return allVerified ? "real_verified" : "real_unverified";
+}
+
+function provenanceText(e: QuoteEvaluation): string | null {
+  const p = e.quote.provenance;
+  if (!p || p.kind !== "price_list") return null;
+  return [`Preisliste ${p.file ?? "?"}, Zeile ${p.row ?? "?"}`, p.supplierUpdatedAt && `Stand ${p.supplierUpdatedAt}`, p.importedAt && `importiert ${p.importedAt.slice(0, 10)}`, p.dataSource && `Quelle: ${p.dataSource}`]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 export function toOfferView(e: QuoteEvaluation, query: ProductQuery, priceGross: number): OfferView {
   const q = e.quote;
+  const funding = assessFunding({ quote: q, financing: e.financing, cost: e.cost });
   const documents = q.safety.documents;
   const openDocuments = (query.safety.requiredDocuments ?? []).filter((d) => !hasDocument(documents, d));
   const margin = e.cost ? calculateMargin(priceGross, e.cost.perUnit) : null;
@@ -195,23 +252,27 @@ export function toOfferView(e: QuoteEvaluation, query: ProductQuery, priceGross:
     supplierName: q.supplierName,
     demo: q.demo,
     eligible: e.eligibility.eligible && e.score !== null,
+    source: sourceOf(e, query, openDocuments),
+    provenanceText: provenanceText(e),
     shipsFrom: factValue(q.fulfillment.shipsFrom),
     unitPrice: cell(q.pricing.unitPrice),
     shippingCost: cell(q.pricing.shippingCost),
-    importCost: importCost.value === undefined && e.cost ? { value: e.cost.importCost, status: importCost.status } : importCost,
+    importCost: importCost.value === undefined && e.cost ? { ...importCost, value: e.cost.importCost } : importCost,
     perUnit: e.cost?.perUnit ?? null,
     deliveryDays: cell(q.fulfillment.deliveryDays),
     stock: cell(q.fulfillment.stock),
     financing: { status: e.financing.status, label: e.financing.label, requiresPrefinancing: e.financing.requiresPrefinancing },
+    funding,
     purchaseGuardTerms: toPurchaseGuardTerms(e),
     margin: margin ? { contribution: margin.contribution, marginPercent: margin.marginPercent } : null,
     score: e.score?.total ?? null,
     facts: factLists(e),
     openDocuments,
     documents,
-    flags: flagsFor(e, openDocuments),
+    flags: flagsFor(e, openDocuments, funding),
     exclusions: e.eligibility.exclusions.map((x) => x.message),
-    warnings: e.eligibility.warnings.map((w) => w.message),
+    // Nachweise, die der aktuellen Preisliste widersprechen, werden nicht angewendet – aber offen angezeigt.
+    warnings: [...e.eligibility.warnings.map((w) => w.message), ...(q.provenance?.evidenceConflicts ?? [])],
   };
 }
 

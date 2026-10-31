@@ -26,6 +26,8 @@ import {
   type SupplierComparison,
   type SupplierProductLink,
 } from "@/lib/suppliers";
+import { createPriceListAdapter, priceListQuotesFor, type ImportLogEntry } from "@/lib/suppliers/import";
+import { loadEvidence, loadOfferStore } from "@/lib/suppliers/server/offer-store";
 import type { DemoOrder, Product } from "@/lib/types";
 
 export type Recommendation = "kandidat" | "beobachten" | "verwerfen";
@@ -61,10 +63,19 @@ export function supplierQueryFor(productId: string): ProductQuery {
   return query;
 }
 
+/** Lokal importierte Preislisten und Nachweise (leer, solange nichts importiert wurde). */
+function importedSupplierData() {
+  const { store } = loadOfferStore();
+  const { entries } = loadEvidence();
+  return { store, evidence: entries };
+}
+
 export function getProductAnalyses(): ProductAnalysis[] {
+  const imported = importedSupplierData();
   return DEMO_PRODUCTS.map((product) => {
-    // Synchroner Vergleich über dieselben Demo-Angebote, die auch die Demo-Adapter liefern.
-    const scout = compareQuotes(supplierQueryFor(product.id), demoQuotesFor(product.id));
+    // Synchroner Vergleich über dieselben Angebote, die auch die Adapter liefern (Demo + importierte Preislisten).
+    const query = supplierQueryFor(product.id);
+    const scout = compareQuotes(query, [...demoQuotesFor(product.id), ...priceListQuotesFor(imported.store, query, imported.evidence)]);
     const offers = toOfferEvaluations(scout);
     const best = offers.find((o) => o.isBest);
     const costs = offers.map((o) => o.landedCost).filter(Number.isFinite);
@@ -89,9 +100,36 @@ export function getProductAnalyses(): ProductAnalysis[] {
  * Kein Netzwerk, keine Kosten, keine Bestellungen.
  */
 export async function getSupplierScoutReports(): Promise<{ product: Product; report: ScoutReport }[]> {
-  return Promise.all(
-    DEMO_PRODUCTS.map(async (product) => ({ product, report: await scoutSuppliers(supplierQueryFor(product.id), DEMO_ADAPTERS) })),
-  );
+  const imported = importedSupplierData();
+  const adapters = [...DEMO_ADAPTERS, createPriceListAdapter(imported.store, imported.evidence)];
+  return Promise.all(DEMO_PRODUCTS.map(async (product) => ({ product, report: await scoutSuppliers(supplierQueryFor(product.id), adapters) })));
+}
+
+export interface SupplierImportStatus {
+  offers: number;
+  /** davon synthetische Testdaten */
+  synthetic: number;
+  /** Angebote ohne Zuordnung zu einem Produkt (keine oder unbekannte GTIN) */
+  unassigned: number;
+  lastImport: ImportLogEntry | null;
+  evidenceEntries: number;
+  errors: string[];
+}
+
+/** Stand der lokal importierten Preislisten für die Anzeige (ohne Preise oder Konditionen). */
+export function getSupplierImportStatus(): SupplierImportStatus {
+  const { store, error } = loadOfferStore();
+  const evidence = loadEvidence();
+  const gtins = new Set(Object.values(DEMO_QUERIES).map((q) => q.gtin));
+  const offers = Object.values(store.offers);
+  return {
+    offers: offers.length,
+    synthetic: offers.filter((o) => o.provenance.synthetic).length,
+    unassigned: offers.filter((o) => !o.data.gtin || !gtins.has(o.data.gtin)).length,
+    lastImport: store.imports.at(-1) ?? null,
+    evidenceEntries: evidence.entries.length,
+    errors: [...(error ? [error] : []), ...evidence.errors],
+  };
 }
 
 /** Kopplung Produkt ↔ Scout ↔ Shopify-Listing (Handle, Varianten, Angebots-ID der Kalkulationsbasis). */

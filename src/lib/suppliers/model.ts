@@ -6,17 +6,37 @@
 // ob sie bestätigt, nur behauptet (unbestätigt) oder gar nicht vorhanden ist.
 // Fehlende Angaben werden nie stillschweigend durch Annahmen ersetzt.
 
-/** Status einer Angabe: bestätigt (geprüfte Quelle), unbestätigt (Selbstauskunft, Schätzung) oder fehlend. */
+/**
+ * Status einer Angabe:
+ * - confirmed   – durch einen UNABHÄNGIGEN Nachweis geprüft (Dokument, Testkauf, Vertrag), mit Quelle und Prüfdatum
+ * - unconfirmed – nicht geprüft; `origin` sagt, ob der Lieferant sie angegeben hat oder ob sie geschätzt ist
+ * - missing     – keine Angabe
+ * Eine Lieferantenangabe (z. B. aus einer Preisliste) ist nie „confirmed“.
+ */
 export type FactStatus = "confirmed" | "unconfirmed" | "missing";
+
+/** Herkunft einer unbestätigten Angabe: vom Lieferanten angegeben oder geschätzt/abgeleitet. */
+export type FactOrigin = "supplier" | "estimate";
 
 export type Fact<T> =
   | { status: "confirmed"; value: T; source: string; checkedAt: string }
-  | { status: "unconfirmed"; value: T; source: string }
+  | { status: "unconfirmed"; value: T; source: string; origin?: FactOrigin }
   | { status: "missing" };
 
 export const confirmed = <T>(value: T, source: string, checkedAt: string): Fact<T> => ({ status: "confirmed", value, source, checkedAt });
-export const unconfirmed = <T>(value: T, source: string): Fact<T> => ({ status: "unconfirmed", value, source });
+export const unconfirmed = <T>(value: T, source: string, origin?: FactOrigin): Fact<T> =>
+  origin ? { status: "unconfirmed", value, source, origin } : { status: "unconfirmed", value, source };
+/** Vom Lieferanten angegeben (Preisliste, Selbstauskunft) – nicht unabhängig geprüft. */
+export const supplierStated = <T>(value: T, source: string): Fact<T> => unconfirmed(value, source, "supplier");
 export const missing = <T>(): Fact<T> => ({ status: "missing" });
+
+/** Vierstufige Einordnung für Anzeige und Prüfung. */
+export type FactLevel = "verified" | "supplier_stated" | "unconfirmed" | "missing";
+export function factLevel(f: Fact<unknown>): FactLevel {
+  if (f.status === "confirmed") return "verified";
+  if (f.status === "missing") return "missing";
+  return f.origin === "supplier" ? "supplier_stated" : "unconfirmed";
+}
 
 /** Wert einer Angabe, falls vorhanden (bestätigt oder unbestätigt). */
 export const factValue = <T>(f: Fact<T>): T | undefined => (f.status === "missing" ? undefined : f.value);
@@ -90,6 +110,8 @@ export interface Pricing {
   importCost: Fact<number>;
   /** Mindestabnahme je Bestellung. Größer als die Bestellmenge = Vorratskauf → ausgeschlossen. */
   minOrderQuantity: Fact<number>;
+  /** Mindestbestellwert netto in EUR (0 = keiner). Höher als eine Kundenbestellung = Vorratskauf → ausgeschlossen. */
+  minOrderValue: Fact<number>;
 }
 
 export interface Fulfillment {
@@ -143,6 +165,30 @@ export interface Reliability {
   sampleTested: Fact<boolean>;
 }
 
+/** Woher ein Angebot stammt – für importierte Angebote vollständig nachvollziehbar. */
+export interface QuoteProvenance {
+  kind: "demo" | "price_list";
+  /** Datenquelle laut Lieferant bzw. Spalte „Quelle“ */
+  dataSource?: string;
+  /** Dateiname der importierten Preisliste */
+  file?: string;
+  /** SHA-256 der importierten Datei */
+  fileSha256?: string;
+  /** Zeile in der Datei (1 = Kopfzeile) */
+  row?: number;
+  /** Kennung und Zeitpunkt des Imports */
+  importId?: string;
+  importedAt?: string;
+  /** Aktualisierungsdatum laut Lieferant */
+  supplierUpdatedAt?: string;
+  /** Nachweise, die der aktuellen Preisliste widersprechen und deshalb NICHT angewendet wurden */
+  evidenceConflicts?: string[];
+  /** Angebot fehlte in der letzten Preisliste dieses Lieferanten (oder wurde dort abgelehnt) – nicht mehr aktuell */
+  outdated?: boolean;
+  /** Synthetische Testdaten – werden wie Demo-Daten behandelt */
+  synthetic?: boolean;
+}
+
 /** Ein normalisiertes Lieferantenangebot für genau ein Produkt. */
 export interface SupplierQuote {
   /** Eindeutig je Adapter, z. B. "demo:brightline:p-led" */
@@ -162,4 +208,6 @@ export interface SupplierQuote {
   reliability: Reliability;
   /** Zeitpunkt, zu dem der Adapter die Daten geliefert hat (ISO) */
   retrievedAt: string;
+  /** Herkunft (fehlt bei älteren Adaptern) */
+  provenance?: QuoteProvenance;
 }

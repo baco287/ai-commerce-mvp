@@ -3,8 +3,9 @@
 
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
-import { SAFETY_SWITCHES } from "@/lib/config/budget";
+import { describe, expect, it, vi } from "vitest";
+import { FUNDING, SAFETY_SWITCHES } from "@/lib/config/budget";
+import { NETWORK_BLOCKED_MESSAGE } from "@/test/setup";
 import { evaluateAutoPurchase } from "./purchase";
 
 const SRC = join(__dirname, "..", "..");
@@ -57,8 +58,9 @@ describe("MVP-Sicherheitsgrenzen", () => {
 
   // Netzwerk und Zugangsdaten sind nur an genau diesen Stellen erlaubt (Shopify, nur lesend).
   // Jede neue Stelle muss hier bewusst eingetragen werden.
-  const NETWORK_ALLOWED = ["lib/shopify/server/auth.ts", "lib/shopify/server/admin-client.ts"];
-  const ENV_ALLOWED = ["lib/shopify/server/config.ts"];
+  // test/setup.ts nennt fetch/WebSocket und SHOPIFY_-Variablen nur, um sie in Tests zu SPERREN bzw. zu entfernen.
+  const NETWORK_ALLOWED = ["lib/shopify/server/auth.ts", "lib/shopify/server/admin-client.ts", "test/setup.ts"];
+  const ENV_ALLOWED = ["lib/shopify/server/config.ts", "test/setup.ts"];
   const rel = (f: string) => f.slice(SRC.length + 1).replaceAll("\\", "/");
 
   it("macht Netzwerkaufrufe nur im serverseitigen Shopify-Connector", () => {
@@ -73,7 +75,7 @@ describe("MVP-Sicherheitsgrenzen", () => {
     const offenders = sourceFiles(SRC)
       .filter((f) => /process\.env/.test(readFileSync(f, "utf8")))
       .map(rel);
-    expect(offenders).toEqual(ENV_ALLOWED);
+    expect(offenders.sort()).toEqual([...ENV_ALLOWED].sort());
   });
 
   // Befehle außerhalb von src/ (z. B. scripts/shopify-sync.ts) – gleiche Regeln, Pfade relativ zum Projekt.
@@ -122,6 +124,45 @@ describe("MVP-Sicherheitsgrenzen", () => {
       expect(code, rel(f)).not.toMatch(/lib\/shopify\/server|admin-client|sync-status/);
       expect(code, rel(f)).not.toMatch(/\b(bestellen|jetzt kaufen|in den warenkorb)\b/i);
     }
+  });
+
+  it("hält den Lieferanten-Import lokal: kein Shopify, kein Netzwerk, keine Bestellung", () => {
+    const importFiles = [
+      ...sourceFiles(join(SRC, "lib", "suppliers", "import")),
+      ...sourceFiles(join(SRC, "lib", "suppliers", "server")),
+      join(SCRIPTS, "supplier-import.ts"),
+    ];
+    expect(importFiles.length).toBeGreaterThan(5);
+    for (const f of importFiles) {
+      const code = readFileSync(f, "utf8");
+      expect(code, fromRoot(f)).not.toMatch(/lib\/shopify|admin-client|graphql|createGuardedWriteClient/);
+      expect(code, fromRoot(f)).not.toMatch(/\bfetch\b|XMLHttpRequest|\baxios\b|node:https?|node:net|\bWebSocket\b|process\.env/);
+      expect(code, fromRoot(f)).not.toMatch(/evaluateAutoPurchase|\b(placeOrder|createOrder|submitOrder|purchase|pay)\s*\(/);
+    }
+    // Dateien schreiben nur die lokalen Speicher (Sync-Status, Lieferantenangebote) – unter .data/ (von Git ignoriert).
+    const writers = allFiles()
+      .filter((f) => /\b(writeFileSync|renameSync|appendFileSync|writeFile)\b/.test(readFileSync(f, "utf8")))
+      .map(fromRoot);
+    expect(writers.sort()).toEqual(["src/lib/shopify/server/sync-state.ts", "src/lib/suppliers/server/offer-store.ts"]);
+    expect(readFileSync(join(SRC, "lib", "suppliers", "server", "offer-store.ts"), "utf8")).toMatch(/^(\/\/.*\n|\s)*import "server-only";/);
+    expect(readFileSync(join(ROOT, ".gitignore"), "utf8")).toMatch(/^\.data\/$/m);
+  });
+
+  it("sperrt in Tests jeden echten Netzwerkzugriff – auch einen Shopify-Schreib-Client", async () => {
+    await expect(fetch("https://example.myshopify.com/admin/api/graphql.json")).rejects.toThrow(NETWORK_BLOCKED_MESSAGE);
+    expect(Object.keys(process.env).filter((k) => k.startsWith("SHOPIFY_"))).toEqual([]);
+    const { createGuardedWriteClient } = await import("@/lib/shopify/server/admin-client");
+    const fetchMock = vi.mocked(fetch);
+    const before = fetchMock.mock.calls.length;
+    await expect(
+      createGuardedWriteClient({ storeDomain: "test.myshopify.com", clientId: "test", clientSecret: "test" }, { writeEnabled: true }),
+    ).rejects.toThrow();
+    // Der einzige Versuch (Token-Abruf) ist am gesperrten fetch gescheitert – keine Anfrage hat das Netz erreicht.
+    expect(fetchMock.mock.calls.length).toBe(before + 1);
+  });
+
+  it("behauptet ohne Kontonachweis keine verfügbaren Mittel", () => {
+    expect(FUNDING.verified).toBe(false);
   });
 
   it("hält den Shopify-Connector vom Browser fern", () => {

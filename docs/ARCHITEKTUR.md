@@ -147,7 +147,8 @@ Datenbank, keine Benutzerkonten und keine gespeicherten Zustände. Shopify ist *
    `Object.freeze` gesichert und lässt sich weder über die Oberfläche noch zur Laufzeit ändern.
 4. **Regressionstests** (`src/lib/guards/safety.test.ts`) schlagen fehl, sobald ein Schalter
    eingeschaltet, ein Server-Endpunkt ergänzt oder Netzwerk/`process.env` außerhalb der drei
-   freigegebenen Shopify-Serverdateien verwendet wird. Das Lockern einer Sperre ist damit immer eine
+   freigegebenen Shopify-Serverdateien verwendet wird. Einzige weitere Fundstelle ist die Test-Einrichtung
+   `src/test/setup.ts`, die `fetch`/`WebSocket` in Tests **sperrt** und `SHOPIFY_*`-Variablen entfernt. Das Lockern einer Sperre ist damit immer eine
    sichtbare, bewusste Code-Änderung.
 
 Sobald in Phase 2 echte Endpunkte (z. B. Shopify-Webhooks, n8n) hinzukommen, muss die Sperre
