@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { loadSyncState, recordSync } from "./sync-state";
+import { loadSyncState, recordSync, successfulParts } from "./sync-state";
 
 const dirs: string[] = [];
 const tempFile = () => {
@@ -64,6 +64,22 @@ describe("Letzte erfolgreiche Synchronisierung", () => {
       inventoryAt: "2026-10-31T10:00:00.000Z",
       inventoryVariantCount: 9,
     });
+  });
+
+  it("übernimmt nur vollständige Teile als Erfolg", () => {
+    const at = "2026-10-31T10:00:00.000Z";
+    expect(successfulParts({ fetchedAt: at, products: { count: 5, complete: true }, inventory: { variantCount: 9, complete: true } })).toEqual({
+      productsAt: at,
+      productCount: 5,
+      inventoryAt: at,
+      inventoryVariantCount: 9,
+    });
+    expect(successfulParts({ fetchedAt: at, products: { count: 5, complete: true }, inventory: { variantCount: 9, complete: false } })).toEqual({
+      productsAt: at,
+      productCount: 5,
+    });
+    // Bestand gilt nie als vollständig, wenn die Produkte selbst unvollständig sind
+    expect(successfulParts({ fetchedAt: at, products: { count: 1000, complete: false }, inventory: { variantCount: 9, complete: true } })).toEqual({});
   });
 
   it("verkraftet eine beschädigte Datei", async () => {

@@ -113,7 +113,15 @@ async function LiveSyncStatus() {
           </dl>
           <p className="mt-4 text-xs font-medium text-subtle">Letzte erfolgreiche Synchronisierung</p>
           <dl className="mt-1.5 space-y-1.5 text-sm">
-            <Row label="Produkte" value={formatDateTime(lastSync.productsAt ?? status.fetchedAt)} />
+            <Row
+              label="Produkte"
+              value={
+                status.productsComplete
+                  ? formatDateTime(status.fetchedAt)
+                  : `unvollständig${lastSync.productsAt ? ` – zuletzt vollständig ${formatDateTime(lastSync.productsAt)}` : ""}`
+              }
+              warn={!status.productsComplete}
+            />
             <Row label="Bestand" value={inventoryLabel} warn={!inventoryOk} />
           </dl>
           {!currencyOk && (

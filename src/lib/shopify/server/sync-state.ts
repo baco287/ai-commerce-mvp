@@ -37,6 +37,29 @@ export async function loadSyncState(file = DEFAULT_SYNC_STATE_FILE): Promise<Syn
   }
 }
 
+/** Ergebnis einer Abfrage, bevor entschieden wird, was als Erfolg gespeichert wird. */
+export interface SyncOutcome {
+  fetchedAt: string;
+  /** complete = alle Produkte und alle Varianten gelesen (keine Seiten-/Variantengrenze erreicht) */
+  products: { count: number; complete: boolean };
+  /** fehlt = Bestand nicht gelesen (Berechtigung fehlt oder Fehler); complete = alle Varianten, alle Standorte */
+  inventory?: { variantCount: number; complete: boolean };
+}
+
+/** Nur vollständig gelesene Bereiche gelten als erfolgreiche Synchronisierung – Teilergebnisse nie. */
+export function successfulParts(outcome: SyncOutcome): SyncState {
+  const update: SyncState = {};
+  if (outcome.products.complete) {
+    update.productsAt = outcome.fetchedAt;
+    update.productCount = outcome.products.count;
+  }
+  if (outcome.products.complete && outcome.inventory?.complete) {
+    update.inventoryAt = outcome.fetchedAt;
+    update.inventoryVariantCount = outcome.inventory.variantCount;
+  }
+  return update;
+}
+
 /** Übernimmt je Bereich (Produkte, Bestand) nur einen neueren Zeitpunkt – samt zugehöriger Anzahl. */
 export function mergeSyncState(stored: SyncState, update: SyncState): SyncState {
   const next = { ...stored };

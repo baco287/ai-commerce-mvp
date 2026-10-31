@@ -141,6 +141,7 @@ Kontrollzentrale die Verbindung bewusst ablehnen.
 | Rot: „Die App hat Schreibrechte (write_inventory)“ | Version enthält ein Schreibrecht → neue Version nur mit `read_products,read_inventory` |
 | Bestand „–“ bei einer Variante | Shopify führt für den Artikel keinen Standort (zählt als 0) → im Admin Bestand am Standort aktivieren |
 | Gelb: Bestand „unvollständig“ | Mehr als 10 Standorte je Artikel, mehr als 1000 Produkte/100 Varianten oder Shopify lieferte zu einer Variante keine Daten – Hinweise in den Karten beachten |
+| Gelb: Produkte „unvollständig“ | Mehr als 1000 Produkte oder mehr als 100 Varianten bei einem Produkt – der Abgleich zeigt, welche. Zählt nicht als erfolgreiche Synchronisierung |
 
 Der **Lieferantenbestand** (Lager der Dropshipping-Partner) ist davon unabhängig, wird nicht mit dem
 Shopify-Bestand vermischt und ist noch nicht angebunden – die Lieferanten-Adapter entstehen separat.
@@ -154,8 +155,10 @@ Shopify-Bestand vermischt und ist noch nicht angebunden – die Lieferanten-Adap
   Aufruf der Seite. Im Produktionsbetrieb ist sie gesperrt, bis die Kontrollzentrale einen Login hat.
 - **Letzte Synchronisierung:** Die Zeitpunkte der letzten erfolgreichen Produkt- und Bestandsabfrage
   (intern zusätzlich die Anzahl) werden lokal in `.data/shopify-sync-state.json` gespeichert (von Git
-  ignoriert, keine Zugangsdaten), damit sie auch nach einem Fehler sichtbar bleiben. Ein nur teilweise
-  gelesener Bestand zählt nicht als Erfolg und wird als „unvollständig“ angezeigt.
+  ignoriert, keine Zugangsdaten), damit sie auch nach einem Fehler sichtbar bleiben. Nur vollständig
+  gelesene Daten zählen als Erfolg: Abgeschnittene Produkt-, Varianten- oder Standortlisten und fehlende
+  Bestandsdaten werden als „unvollständig“ angezeigt und nicht gespeichert
+  (Tests: `src/lib/shopify/server/sync-status.test.ts`).
 - **Geheimnisse:** nur in `.env.local`; Fehlermeldungen werden vor der Anzeige bereinigt; keine Protokollierung.
 - **Token:** 24 Stunden gültig, nur im Arbeitsspeicher des Servers, 60 Sekunden vor Ablauf erneuert.
 - **API-Version** fest auf `2026-10` (erreichbar bis 16.10.2027) – rechtzeitig anheben.
