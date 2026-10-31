@@ -11,5 +11,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
+    // Ersetzt den lokalen Lieferanten-Speicher (.data/) in allen Tests durch einen leeren.
+    setupFiles: ["src/test/setup.ts"],
   },
 });

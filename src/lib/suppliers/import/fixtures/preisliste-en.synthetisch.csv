@@ -1,0 +1,3 @@
+supplier,sku,gtin,brand,mpn,title,net_price,currency,shipping_cost_de,minimum_order_quantity,minimum_order_value,stock,ship_from,delivery_days_min,delivery_days_max,dropshipping,blind_shipping,payment_terms,last_updated,source
+Sample Wholesale Ltd. (synthetisch),SW-LED-5,2000000000015,Lumora,LM-5M-RGB,"LED strip 5 m, app controlled",8.75,EUR,3.10,1,0,640,NL,4,6,yes,yes,net 30,2026-10-25,Supplier feed export (synthetisch)
+Sample Wholesale Ltd. (synthetisch),SW-CABLE-10,2000000000039,Cablora,CB-10,"Cable organizer, 10 pcs",1.95,EUR,2.80,1,25.00,2500,CZ,3,5,yes,no,prepayment,2026-10-25,Supplier feed export (synthetisch)

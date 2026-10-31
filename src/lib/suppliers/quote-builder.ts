@@ -33,7 +33,7 @@ export function buildQuote(o: QuoteOverrides): SupplierQuote {
       openIssues: [],
       documents: ["Konformitätserklärung (Demo)"],
     },
-    pricing: { unitPrice: ok(10), shippingCost: ok(3), importCost: ok(0), minOrderQuantity: ok(1) },
+    pricing: { unitPrice: ok(10), shippingCost: ok(3), importCost: ok(0), minOrderQuantity: ok(1), minOrderValue: ok(0) },
     fulfillment: { shipsFrom: ok("DE"), deliversToDestination: ok(true), deliveryDays: ok({ min: 2, max: 4 }), stock: ok(500), tracking: ok(true) },
     dropshipping: { supported: ok(true), blindShipping: ok(true), orderChannel: ok("portal"), returnsHandledBy: ok("supplier") },
     payment: { terms: ok({ kind: "net_terms", days: 30 }), methods: ok(["invoice"]), creditLimit: ok(500), requiresBusinessVerification: ok(false) },

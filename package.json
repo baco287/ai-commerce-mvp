@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "check": "npm run lint && npm run typecheck && npm run test",
     "shopify:csv": "vitest run -u src/lib/shopify/csv-export.test.ts",
-    "shopify:sync": "tsx --conditions=react-server --env-file-if-exists=.env.local scripts/shopify-sync.ts"
+    "shopify:sync": "tsx --conditions=react-server --env-file-if-exists=.env.local scripts/shopify-sync.ts",
+    "suppliers:import": "tsx --conditions=react-server scripts/supplier-import.ts"
   },
   "dependencies": {
     "lucide-react": "^1.59.0",

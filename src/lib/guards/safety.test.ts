@@ -4,7 +4,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { SAFETY_SWITCHES } from "@/lib/config/budget";
+import { FUNDING, SAFETY_SWITCHES } from "@/lib/config/budget";
 import { evaluateAutoPurchase } from "./purchase";
 
 const SRC = join(__dirname, "..", "..");
@@ -122,6 +122,32 @@ describe("MVP-Sicherheitsgrenzen", () => {
       expect(code, rel(f)).not.toMatch(/lib\/shopify\/server|admin-client|sync-status/);
       expect(code, rel(f)).not.toMatch(/\b(bestellen|jetzt kaufen|in den warenkorb)\b/i);
     }
+  });
+
+  it("hält den Lieferanten-Import lokal: kein Shopify, kein Netzwerk, keine Bestellung", () => {
+    const importFiles = [
+      ...sourceFiles(join(SRC, "lib", "suppliers", "import")),
+      ...sourceFiles(join(SRC, "lib", "suppliers", "server")),
+      join(SCRIPTS, "supplier-import.ts"),
+    ];
+    expect(importFiles.length).toBeGreaterThan(5);
+    for (const f of importFiles) {
+      const code = readFileSync(f, "utf8");
+      expect(code, fromRoot(f)).not.toMatch(/lib\/shopify|admin-client|graphql|createGuardedWriteClient/);
+      expect(code, fromRoot(f)).not.toMatch(/\bfetch\b|XMLHttpRequest|\baxios\b|node:https?|node:net|\bWebSocket\b|process\.env/);
+      expect(code, fromRoot(f)).not.toMatch(/evaluateAutoPurchase|\b(placeOrder|createOrder|submitOrder|purchase|pay)\s*\(/);
+    }
+    // Dateien schreiben nur die lokalen Speicher (Sync-Status, Lieferantenangebote) – unter .data/ (von Git ignoriert).
+    const writers = allFiles()
+      .filter((f) => /\b(writeFileSync|renameSync|appendFileSync|writeFile)\b/.test(readFileSync(f, "utf8")))
+      .map(fromRoot);
+    expect(writers.sort()).toEqual(["src/lib/shopify/server/sync-state.ts", "src/lib/suppliers/server/offer-store.ts"]);
+    expect(readFileSync(join(SRC, "lib", "suppliers", "server", "offer-store.ts"), "utf8")).toMatch(/^(\/\/.*\n|\s)*import "server-only";/);
+    expect(readFileSync(join(ROOT, ".gitignore"), "utf8")).toMatch(/^\.data\/$/m);
+  });
+
+  it("behauptet ohne Kontonachweis keine verfügbaren Mittel", () => {
+    expect(FUNDING.verified).toBe(false);
   });
 
   it("hält den Shopify-Connector vom Browser fern", () => {

@@ -5,6 +5,7 @@ export * from "./adapter";
 export * from "./rules";
 export * from "./eligibility";
 export * from "./financing";
+export * from "./funding";
 export * from "./scoring";
 export * from "./compare";
 export * from "./scout";

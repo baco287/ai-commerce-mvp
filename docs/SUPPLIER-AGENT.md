@@ -241,7 +241,7 @@ enthalten. Ein Treffer über Suchbegriffe ersetzt nie die Identitätsprüfung.
 - **Seite `/lieferanten`:** `getSupplierScoutReports()` → `buildSupplierView()` (`dashboard.ts`) → Komponenten in
   `src/components/suppliers/supplier-scout.tsx`. Je Produkt: günstigster, schnellster und insgesamt bester geeigneter
   Lieferant (gleiche Angebote zu einer Karte zusammengefasst), Einkauf/Versand/Import, Lieferzeit nach DE,
-  Finanzierung, Marge nach `calculateMargin`, Status jeder Angabe (bestätigt/unbestätigt/fehlt), offene
+  Finanzierung, Marge nach `calculateMargin`, Status jeder Angabe (geprüft/vom Lieferanten angegeben/unbestätigt/fehlt), offene
   Compliance-Nachweise (`ProductQuery.safety.requiredDocuments`), ausgeschlossene Angebote mit Gründen.
 - **Kennzeichnung:** Demo-Daten, fehlende Produktnachweise, unsichere Finanzierung, nicht gesicherte Lieferfähigkeit,
   nicht bestätigtes Dropshipping. Jede Empfehlungskarte: „Empfehlung, keine Einkaufsfreigabe · Einkaufssperre: Vorkasse“.
@@ -259,12 +259,27 @@ Shopify-SKU die Artikelnummer des Lieferanten (`supplierSkuByShopifySku`); die S
 
 ### Nächste Schritte zu echten Lieferanten
 
-1. **Manuelle Preisliste als erster echter Adapter** (`kind: "manual"`, `paid: false`, `network: false`): Angebote
-   aus einer geprüften CSV eines Großhändlers einlesen, Angaben nur mit Quelle und Prüfdatum als `confirmed`.
+1. ~~**Manuelle Preisliste als erster echter Adapter**~~ – umgesetzt, siehe [Preislisten-Import](#preislisten-import-umgesetzt-am-31102026).
 2. **Echte GTINs** der Zielprodukte erfassen und je Variante die Lieferanten-Artikelnummer zuordnen.
 3. **Freigabe-Fluss:** Empfehlung „insgesamt bester" als `ApprovalRequest` (`supplier_change`) – eine Freigabe setzt nur
    den freigegebenen Lieferanten je Produkt; Einkäufe bleiben über `SAFETY_SWITCHES.autoPurchaseEnabled` gesperrt.
 4. **Feeds/APIs** erst nach Kosten- und Netzwerkfreigabe (`paid`/`network`, Sicherheitstest `NETWORK_ALLOWED`).
+
+## Preislisten-Import (umgesetzt am 31.10.2026)
+
+Echte Großhändler-Preislisten kommen per CSV über den Adapter `price-list` (`kind: "manual"`, `paid: false`,
+`network: false`) in den Scout – Anleitung, Spalten, Nachweisdatei und Prüfungen: [LIEFERANTEN-IMPORT.md](LIEFERANTEN-IMPORT.md).
+
+- `npm run suppliers:import -- liste.csv` (Testlauf) → `--apply --confirm <CODE>` (Übernahme). Speicher und Nachweise
+  liegen lokal in `.data/suppliers/` (nicht in Git).
+- Angaben haben vier Stufen (`factLevel`): **geprüft** (Nachweis) · **vom Lieferanten angegeben** (`supplierStated`,
+  jede Preislisten- und Demo-Selbstauskunft) · **unbestätigt** · **fehlt**. Nur ein Eintrag in der Nachweisdatei macht
+  eine Angabe `confirmed` – produktspezifisch über die GTIN.
+- Neu im Modell: `pricing.minOrderValue` (Mindestbestellwert, Ausschluss bei erzwungenem Vorratskauf) und
+  `SupplierQuote.provenance` (Datei, Zeile, SHA-256, Import, Stand, Quelle).
+- Neu: `funding.ts` ergänzt die Finanzierung um Beträge, Fälligkeit, Mittel und Sicherheitsreserve
+  (`FUNDING` in `config/budget.ts`, `verified: false` bis zum Kontonachweis).
+- Kennzeichnung auf `/lieferanten`: `DEMO` · `ECHTE QUELLE, UNGEPRÜFT` · `NACHWEISE GEPRÜFT` · `AUSGESCHLOSSEN`.
 
 ## Sicherheit
 
@@ -273,5 +288,7 @@ Shopify-SKU die Artikelnummer des Lieferanten (`supplierSkuByShopifySku`); die S
 - Angebote aus Demo-Adaptern werden immer als `demo: true` markiert; jede Begründung enthält dann
   „Demo-Daten – keine echte Einkaufsgrundlage".
 - Bestehende Sicherheitsschalter und Einkaufssperren werden nur gelesen, nie verändert.
+- Der Preislisten-Import schreibt nur in `.data/suppliers/`, nur nach Bestätigungscode und ohne Löschen; er hat keinen
+  Zugriff auf Shopify, Netzwerk oder Bestellungen (Sicherheitstest).
 - Die Seite `/lieferanten` ist reine Anzeige: keine Knöpfe, Formulare oder Server-Aktionen, kein Shopify-Zugriff
   (Sicherheitstest in `src/lib/guards/safety.test.ts`). Eine Empfehlung ist nie eine Einkaufsfreigabe.

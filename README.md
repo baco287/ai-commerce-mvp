@@ -40,6 +40,7 @@ Dashboard: <http://localhost:3000>
 | `npm run lint` | ESLint |
 | `npm run typecheck` | Routentypen erzeugen + TypeScript prüfen |
 | `npm run check` | Lint, Typecheck und Tests zusammen |
+| `npm run suppliers:import -- liste.csv` | Lieferanten-Preisliste (CSV) prüfen; Übernahme in den lokalen Speicher nur mit `--apply --confirm <CODE>` – siehe [docs/LIEFERANTEN-IMPORT.md](docs/LIEFERANTEN-IMPORT.md) |
 
 ## Bereiche
 
@@ -47,7 +48,7 @@ Dashboard: <http://localhost:3000>
 | --- | --- |
 | `/` Dashboard | Umsatz, Bestellungen, erwarteter Gewinn und Kosten, Agentenstatus, Aktivitäten, Warnungen, Freigaben, letzte Bestellungen mit Einkaufsprüfung |
 | `/produkte` | 5 Demo-Produkte: Nachfragebewertung, Verkaufspreis, Lieferantenpreise, Marge, Empfehlung, Kalkulation je Produkt |
-| `/lieferanten` | Supplier Scout je Produkt: günstigster, schnellster und insgesamt bester **geeigneter** Lieferant mit Kosten, Lieferzeit, Finanzierung, Marge, bestätigten/unbestätigten Angaben, offenen Nachweisen und Ausschlussgründen – Empfehlung, keine Einkaufsfreigabe |
+| `/lieferanten` | Supplier Scout je Produkt: günstigster, schnellster und insgesamt bester **geeigneter** Lieferant mit Kosten, Lieferzeit, Finanzierung, Marge, Angaben nach Stufe (geprüft / vom Lieferanten angegeben / unbestätigt / fehlt), Herkunft (DEMO · ECHTE QUELLE, UNGEPRÜFT · NACHWEISE GEPRÜFT), offenen Nachweisen und Ausschlussgründen; Demo-Angebote plus lokal importierte Preislisten – Empfehlung, keine Einkaufsfreigabe |
 | `/agenten` | Die sechs KI-Agenten mit Befugnissen, Freigabepflichten und Status (Pausieren nur lokal) |
 | `/freigaben` | Freigabe-Warteschlange, Sicherheitsschalter, Grenzwerte, Startbudget 500 € |
 | `/shopify` | Shopify-Synchronisierung: **echte** Produktdaten aus dem Dev Store (die Seite liest nur) im Abgleich mit der Kontrollzentrale; Shopify-Bestand je Standort (mit `read_inventory`), getrennt vom Lieferantenbestand; letzte erfolgreiche Synchronisierung; Dry-Run der automatischen Produktanlage |
@@ -69,6 +70,9 @@ Dashboard: <http://localhost:3000>
 - Shopify-Schreibzugriff ist **eng freigegeben** (seit 31.10.2026): nur Bestandsverfolgung, Demo-Bestand 0,
   eigene Produktbilder und fehlende Produkte als Entwurf – per `npm run shopify:sync` (Testlauf) bzw.
   `npm run shopify:sync -- --apply`, nie aus dem Dashboard. Veröffentlichen bleibt manuell.
+- Lieferanten-Preislisten werden nur lokal importiert (`.data/suppliers/`, nicht in Git) – kein Netzwerk, kein
+  Shopify, keine Bestellung. Preislisten-Angaben gelten als „vom Lieferanten angegeben“; CE, GPSR, Lieferfähigkeit und
+  Zahlungsziel werden erst durch produktspezifische Nachweise „geprüft“.
 - Zugangsdaten gehören in `.env.local` (von Git ignoriert). Vorlage: `.env.example`.
 
 Welche Funktionen serverseitig laufen und welche nur simuliert sind, warum die Einkaufssperre nicht

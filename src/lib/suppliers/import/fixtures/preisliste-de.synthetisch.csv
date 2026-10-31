@@ -1,0 +1,12 @@
+Lieferant;Artikelnummer;EAN;Marke;Hersteller-Artikelnummer;Bezeichnung;EK netto;Währung;Versandkosten DE;Mindestbestellmenge;Mindestbestellwert;Lagerbestand;Versandland;Lieferzeit (Tage);Dropshipping;Neutraler Versand;Zahlungsbedingungen;Stand;Quelle
+Musterhandel Test GmbH (synthetisch);MT-LED-01;2000000000015;Lumora;LM-5M-RGB;LED-Lichtleiste 5 m mit App;9,10;EUR;3,40;1;0;1.200;PL;3-5;ja;ja;Vorkasse;2026-10-28;Händlerportal (synthetisch)
+Musterhandel Test GmbH (synthetisch);MT-STAND-01;2000000000022;Deskora;DK-ALU-1;Laptopständer Aluminium faltbar;12,40;EUR;3,90;1;50,00;300;DE;2-4;ja;nein;Rechnung 30 Tage;2026-10-28;Händlerportal (synthetisch)
+Musterhandel Test GmbH (synthetisch);MT-BOTTLE-01;2000000000046;Aquora;AQ-750;Edelstahl-Trinkflasche 750 ml;5,90;EUR;;;;800;FR;4-6;;;;2026-10-28;Händlerportal (synthetisch)
+Musterhandel Test GmbH (synthetisch);MT-PRICE-BAD;2000000000039;Cablora;CB-10;Kabel-Organizer 10er;abc;EUR;2,90;1;0;500;CZ;3-5;ja;ja;Vorkasse;2026-10-28;Händlerportal (synthetisch)
+Musterhandel Test GmbH (synthetisch);MT-USD-01;2000000000039;Cablora;CB-10;Kabel-Organizer 10er;2,10;USD;2,90;1;0;500;CZ;3-5;ja;ja;Vorkasse;2026-10-28;Händlerportal (synthetisch)
+Musterhandel Test GmbH (synthetisch);MT-UNKNOWN-01;2000000000992;Variora;VR-1;Unbekannter Artikel;4,00;EUR;2,50;1;0;100;DE;1-2;ja;ja;Vorkasse;2026-10-28;Händlerportal (synthetisch)
+Musterhandel Test GmbH (synthetisch);MT-GTIN-BAD;2000000000016;Bandora;BD-3;Uhrenarmband 3er;1,80;EUR;2,60;1;0;400;SK;4-6;ja;ja;Vorkasse;2026-10-28;Händlerportal (synthetisch)
+Musterhandel Test GmbH (synthetisch);MT-LED-01;2000000000015;Lumora;LM-5M-RGB;LED-Lichtleiste 5 m mit App;9,10;EUR;3,40;1;0;1.200;PL;3-5;ja;ja;Vorkasse;2026-10-28;Händlerportal (synthetisch)
+Musterhandel Test GmbH (synthetisch);MT-BAND-01;2000000000053;Bandora;BD-3;Uhrenarmband 3er;1,80;EUR;2,60;1;0;400;SK;4-6;ja;ja;Vorkasse;2026-10-28;Händlerportal (synthetisch)
+Musterhandel Test GmbH (synthetisch);MT-BAND-01;2000000000053;Bandora;BD-3;Uhrenarmband 3er;1,95;EUR;2,60;1;0;400;SK;4-6;ja;ja;Vorkasse;2026-10-28;Händlerportal (synthetisch)
+Musterhandel Test GmbH (synthetisch);MT-AMBIG-01;2000000000053;Bandora;BD-4;Uhrenarmband 4er;12,500;EUR;2,60;1;0;400;SK;4-6;ja;ja;Vorkasse;2026-10-28;Händlerportal (synthetisch)

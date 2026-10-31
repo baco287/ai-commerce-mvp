@@ -11,7 +11,7 @@
 // ausgewogen mit Zahlungsziel, unbestätigte Angaben – und Angebote, die ausgeschlossen werden müssen.
 
 import type { SupplierAdapter } from "../adapter";
-import { missing, unconfirmed, type PaymentConditions, type ProductQuery, type SupplierQuote } from "../model";
+import { missing, supplierStated, type PaymentConditions, type ProductQuery, type SupplierQuote } from "../model";
 import { buildQuote, ok, type QuoteOverrides } from "../quote-builder";
 
 /** Pflichtunterlagen je Produkt – Namen müssen mit den Dokumentbezeichnungen der Angebote beginnen. */
@@ -52,7 +52,7 @@ export const DEMO_QUERIES = {
 
 export type DemoProductId = keyof typeof DEMO_QUERIES;
 
-const said = <T>(value: T) => unconfirmed(value, "Selbstauskunft Lieferant (Demo)");
+const said = <T>(value: T) => supplierStated(value, "Selbstauskunft Lieferant (Demo)");
 const docs = (...names: string[]) => names.map((n) => `${n} (Demo)`);
 
 const PREPAYMENT: Partial<PaymentConditions> = {
