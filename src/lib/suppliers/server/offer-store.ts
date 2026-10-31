@@ -34,13 +34,31 @@ export function loadOfferStore(file = OFFER_STORE_FILE): LoadedStore {
   }
 }
 
-export function loadEvidence(file = EVIDENCE_FILE): { entries: EvidenceEntry[]; errors: string[] } {
+export interface LoadedEvidence {
+  entries: EvidenceEntry[];
+  /** Alle Probleme der Nachweisdatei (auch einzelne ungültige Einträge) */
+  errors: string[];
+  /**
+   * Die Datei als Ganzes ist unbrauchbar (nicht lesbar, kein gültiges JSON, keine Liste „entries“): Dann fehlen ALLE
+   * Nachweise – das ist etwas anderes als „keine Nachweisdatei“. Schreibende Läufe brechen dann ab.
+   */
+  fatal?: string;
+}
+
+export function loadEvidence(file = EVIDENCE_FILE): LoadedEvidence {
   if (!existsSync(/* turbopackIgnore: true */ file)) return { entries: [], errors: [] };
+  let raw: unknown;
   try {
-    return validateEvidence(JSON.parse(readFileSync(/* turbopackIgnore: true */ file, "utf8")));
+    raw = JSON.parse(readFileSync(/* turbopackIgnore: true */ file, "utf8"));
   } catch {
-    return { entries: [], errors: ["Nachweisdatei ist nicht lesbar (kein gültiges JSON)."] };
+    const fatal = "Nachweisdatei ist nicht lesbar (kein gültiges JSON).";
+    return { entries: [], errors: [fatal], fatal };
   }
+  const result = validateEvidence(raw);
+  const list = Array.isArray(raw) ? raw : (raw as { entries?: unknown } | null)?.entries;
+  if (Array.isArray(list)) return result;
+  const fatal = result.errors[0] ?? "Nachweisdatei: erwartet eine Liste „entries“.";
+  return { ...result, errors: result.errors.length ? result.errors : [fatal], fatal };
 }
 
 /**

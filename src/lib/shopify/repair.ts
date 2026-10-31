@@ -2,6 +2,7 @@
 // Reine Funktion ohne Netzwerk. Erzeugt nur Operationen aus der Positivliste (write-operations.ts);
 // alle übrigen Abweichungen werden zur manuellen Prüfung ausgewiesen, nicht automatisch geändert.
 
+import { demoMarkersOf } from "./guards";
 import type { ProductSetInput } from "./product-input";
 import { countSkus, findShopifyProduct, isDemoLike, reconcile, type FieldDiff, type ShopifyProduct } from "./reconcile";
 import { describeWriteOperation, type WriteOperation } from "./write-operations";
@@ -68,8 +69,12 @@ export function planRepairs({ expected, shopify, inventoryComplete, productsComp
   for (const { match } of matches) if (match) claims.set(match.product.id, (claims.get(match.product.id) ?? 0) + 1);
 
   for (const { exp, match } of matches) {
+    // Phase 1: Nur vollständig als Demo gekennzeichnete Eingaben (Tag, Handle-, Titel- und SKU-Präfixe) dürfen
+    // automatisch angelegt bzw. bebildert werden. Echte oder gemischt gekennzeichnete Entwürfe erst mit Freigabe-Akte.
+    const expDemo = demoMarkersOf(exp).demo;
     if (!match) {
-      add(plan, exp.handle, undefined, { kind: "create-draft", input: exp });
+      if (expDemo) add(plan, exp.handle, undefined, { kind: "create-draft", input: exp });
+      else plan.blocked.push(`${exp.handle}: echter Entwurf – Anlage erst mit Freigabe-Akte (Phase 2).`);
       continue;
     }
     const product = match.product;
@@ -80,9 +85,10 @@ export function planRepairs({ expected, shopify, inventoryComplete, productsComp
     const demo = isDemoLike(product);
     const skuCounts = countSkus(product);
 
-    // Bild nur, wenn das Produkt noch GAR KEIN Medium hat (auch keins in Verarbeitung) – nie doppelt.
+    // Bild nur, wenn das Produkt noch GAR KEIN Medium hat (auch keins in Verarbeitung) – nie doppelt. Und nur Demo-Bilder
+    // an Demo-Produkte: Shopify-Produkt als Demo erkennbar UND Soll-Eingabe vollständig als Demo gekennzeichnet.
     const image = exp.files[0];
-    if (image && !product.featuredMedia && product.hasMedia === false) {
+    if (image && demo && expDemo && !product.featuredMedia && product.hasMedia === false) {
       add(plan, exp.handle, undefined, { kind: "add-image", productId: product.id, source: image.originalSource, alt: image.alt });
     }
 

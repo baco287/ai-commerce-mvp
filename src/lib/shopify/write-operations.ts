@@ -4,11 +4,11 @@
 // - Bestandsverfolgung einschalten,
 // - Produktbild hinzufügen (nur eigene Illustrationen aus dem Repository),
 // - Bestand von Demo-Produkten auf 0 setzen,
-// - fehlende Produkte als ENTWURF anlegen.
+// - fehlende Produkte als ENTWURF anlegen (Phase 1: nur vollständig gekennzeichnete Demo-Eingaben).
 // Jede Operation wird hier in ein festes GraphQL-Dokument mit geprüften Variablen übersetzt.
 // Freie Dokumente gibt es nicht. Veröffentlichen, Aktivieren, Löschen, Bestellungen: nie.
 
-import { assertOperationAllowed, assertProductInputAllowed, ShopifyGuardError } from "./guards";
+import { assertOperationAllowed, assertProductInputAllowed, demoMarkersOf, ShopifyGuardError } from "./guards";
 import {
   ADD_PRODUCT_IMAGE_MUTATION,
   CREATE_DRAFT_PRODUCT_MUTATION,
@@ -143,6 +143,8 @@ export function buildWriteRequest(op: WriteOperation, context: WriteContext): Wr
     case "create-draft": {
       // Wirft selbst bei Status ≠ DRAFT, Überverkauf, unverfolgtem Bestand, fehlenden Demo-Kennzeichen …
       assertProductInputAllowed(op.input);
+      // Phase 1: nur vollständig als Demo gekennzeichnete Eingaben. Echte Entwürfe erst mit Freigabe-Akte (Phase 2).
+      check(demoMarkersOf(op.input).demo, "Echter Entwurf – Anlage erst mit Freigabe-Akte (Phase 2); heute nur vollständig gekennzeichnete Demo-Entwürfe.", reasons);
       const extra = Object.keys(op.input).filter((k) => !DRAFT_INPUT_KEYS.has(k));
       check(extra.length === 0, `Nicht erlaubte Felder im Entwurf: ${extra.join(", ")}.`, reasons);
       check(op.input.status === "DRAFT", "Neue Produkte nur als DRAFT.", reasons);

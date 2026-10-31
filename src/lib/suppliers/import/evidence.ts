@@ -1,11 +1,16 @@
 // Unabhängige Nachweise für importierte Angebote (lokale Datei .data/suppliers/evidence.json, nicht in Git).
 //
 // Nur ein Nachweis macht eine Angabe „geprüft“ (confirmed) – nie die Preisliste selbst. Jeder Nachweis nennt
-// das Dokument, wer geprüft hat und wann. Er gilt für genau ein Angebot UND genau ein Produkt (GTIN):
+// das Dokument, wer geprüft hat und wann. Er gilt für genau ein Angebot UND genau ein Produkt – über die GTIN oder,
+// bei Katalogvarianten ohne GTIN, über den Varianten-Schlüssel (`productKey`, z. B. "cat:<id>:<shopSku>"):
 // CE-, GPSR- oder Sicherheitsnachweise sind produktspezifisch und werden für andere Produkte ignoriert.
+// Unterlagen (`safety.document`) tragen einen festen Dokumenttyp (`docType`) – nur der Typ erfüllt eine Pflicht.
 
+import { isDocType, sortDocTypes } from "../documents";
 import {
   confirmed,
+  DOC_TYPES,
+  type DocType,
   type DropshippingSupport,
   type Fact,
   type Fulfillment,
@@ -14,11 +19,13 @@ import {
   type SupplierPaymentTerms,
   type SupplierQuote,
 } from "../model";
+import { sameGtinOrDemoGtin } from "../identity";
 import { stableJson } from "./plan";
 
 export const EVIDENCE_FIELDS = [
   "identity.match",
   "identity.gtin",
+  "identity.brand",
   "safety.ceMarking",
   "safety.euResponsiblePerson",
   "safety.safetyInformationDe",
@@ -26,6 +33,7 @@ export const EVIDENCE_FIELDS = [
   "pricing.unitPrice",
   "pricing.shippingCost",
   "pricing.minOrderValue",
+  "pricing.minOrderQuantity",
   "pricing.importCost",
   "fulfillment.shipsFrom",
   "fulfillment.deliversToDestination",
@@ -35,7 +43,9 @@ export const EVIDENCE_FIELDS = [
   "dropshipping.supported",
   "dropshipping.blindShipping",
   "dropshipping.orderChannel",
+  "dropshipping.returnsHandledBy",
   "payment.terms",
+  "payment.creditLimit",
   "payment.requiresBusinessVerification",
   "reliability.sampleTested",
 ] as const;
@@ -44,9 +54,16 @@ export type EvidenceField = (typeof EVIDENCE_FIELDS)[number];
 export interface EvidenceEntry {
   /** Angebot, für das der Nachweis gilt (`supplierId::supplierSku`) */
   offerKey: string;
-  /** Produkt (GTIN), für das der Nachweis gilt */
-  productGtin: string;
+  /** Produkt (GTIN), für das der Nachweis gilt – genau eines von `productGtin` und `productKey` */
+  productGtin?: string;
+  /** Katalogvariante ohne GTIN, für die der Nachweis gilt (z. B. "cat:<id>:<shopSku>") – genau eines von beiden */
+  productKey?: string;
   field: EvidenceField;
+  /**
+   * Nur bei `safety.document` und dort Pflicht: fester Dokumenttyp der Unterlage (z. B. "eu_doc", "gpsr").
+   * `value` ist dann der Titel der Unterlage.
+   */
+  docType?: DocType;
   value: unknown;
   /** Bezeichnung des Nachweises, z. B. „Konformitätserklärung Nr. 123 vom 01.10.2026“ */
   document: string;
@@ -70,6 +87,7 @@ const isTerms = (v: unknown) =>
 const VALUE_CHECKS: Record<EvidenceField, (v: unknown) => boolean> = {
   "identity.match": (v) => v === "exact" || v === "variant" || v === "different",
   "identity.gtin": (v) => typeof v === "string" && /^\d{8,14}$/.test(v),
+  "identity.brand": (v) => typeof v === "string" && v.trim().length > 0 && v.length <= 80,
   "safety.ceMarking": isBool,
   "safety.euResponsiblePerson": isText,
   "safety.safetyInformationDe": isBool,
@@ -77,6 +95,7 @@ const VALUE_CHECKS: Record<EvidenceField, (v: unknown) => boolean> = {
   "pricing.unitPrice": (v) => isNonNegNumber(v) && (v as number) > 0,
   "pricing.shippingCost": isNonNegNumber,
   "pricing.minOrderValue": isNonNegNumber,
+  "pricing.minOrderQuantity": (v) => Number.isInteger(v) && (v as number) >= 1,
   "fulfillment.deliversToDestination": isBool,
   "fulfillment.deliveryDays": isDays,
   "fulfillment.stock": (v) => Number.isInteger(v) && (v as number) >= 0,
@@ -84,7 +103,10 @@ const VALUE_CHECKS: Record<EvidenceField, (v: unknown) => boolean> = {
   "dropshipping.supported": isBool,
   "dropshipping.blindShipping": isBool,
   "dropshipping.orderChannel": (v) => v === "api" || v === "portal" || v === "email",
+  // supplier = Lieferant nimmt Retouren zurück UND schreibt den Warenwert gut; shop = Retouren laufen über uns
+  "dropshipping.returnsHandledBy": (v) => v === "supplier" || v === "shop",
   "payment.terms": isTerms,
+  "payment.creditLimit": isNonNegNumber,
   "payment.requiresBusinessVerification": isBool,
   "reliability.sampleTested": isBool,
   "pricing.importCost": isNonNegNumber,
@@ -99,6 +121,9 @@ function isValidCheckDate(value: unknown, today: Date): boolean {
   return date.getTime() <= today.getTime() + 24 * 60 * 60 * 1000;
 }
 
+/** Varianten-Schlüssel ohne Leer- und Steuerzeichen, z. B. "cat:kabelkanal:KK-1". */
+const isProductKey = (v: unknown) => typeof v === "string" && /^[^\s\u0000-\u001f\u007f]{3,200}$/.test(v);
+
 /** Prüft den Inhalt der Nachweisdatei; ungültige Einträge werden mit Grund verworfen. */
 export function validateEvidence(raw: unknown, today: Date = new Date()): { entries: EvidenceEntry[]; errors: string[] } {
   const errors: string[] = [];
@@ -109,9 +134,17 @@ export function validateEvidence(raw: unknown, today: Date = new Date()): { entr
     const where = `Nachweis ${i + 1}`;
     const problems: string[] = [];
     if (!isText(e?.offerKey) || !String(e.offerKey).includes("::")) problems.push("offerKey fehlt oder ungültig");
-    if (typeof e?.productGtin !== "string" || !/^\d{8,14}$/.test(e.productGtin)) problems.push("productGtin fehlt oder ungültig");
+    // Genau ein Produktbezug: GTIN oder (bei Katalogvarianten ohne GTIN) der Varianten-Schlüssel
+    const hasGtin = e?.productGtin !== undefined;
+    const hasKey = e?.productKey !== undefined;
+    if (hasGtin === hasKey) problems.push("genau eines von productGtin oder productKey angeben");
+    else if (hasGtin && (typeof e.productGtin !== "string" || !/^\d{8,14}$/.test(e.productGtin))) problems.push("productGtin ungültig");
+    else if (hasKey && !isProductKey(e.productKey)) problems.push("productKey ungültig (z. B. „cat:<id>:<shopSku>“)");
     if (!EVIDENCE_FIELDS.includes(e?.field as EvidenceField)) problems.push(`Feld „${String(e?.field)}“ ist nicht nachweisbar`);
     else if (!VALUE_CHECKS[e.field as EvidenceField](e.value)) problems.push(`Wert passt nicht zu ${e.field}`);
+    if (e?.field === "safety.document") {
+      if (!isDocType(e.docType)) problems.push(`docType fehlt oder unbekannt (erlaubt: ${DOC_TYPES.join(", ")})`);
+    } else if (e?.docType !== undefined) problems.push("docType ist nur bei safety.document zulässig");
     if (!isText(e?.document)) problems.push("document (Bezeichnung des Nachweises) fehlt");
     if (!isText(e?.checkedBy)) problems.push("checkedBy fehlt");
     if (!isValidCheckDate(e?.checkedAt, today)) problems.push("checkedAt fehlt, ist kein gültiges Datum (YYYY-MM-DD) oder liegt in der Zukunft");
@@ -123,6 +156,10 @@ export function validateEvidence(raw: unknown, today: Date = new Date()): { entr
 
 const EVIDENCE_LABELS: Partial<Record<EvidenceField, string>> = {
   "identity.gtin": "GTIN",
+  "identity.brand": "Marke",
+  "pricing.minOrderQuantity": "Mindestbestellmenge",
+  "payment.creditLimit": "Kreditrahmen",
+  "dropshipping.returnsHandledBy": "Retourenabwicklung (Rücknahme mit Gutschrift)",
   "pricing.unitPrice": "Einkaufspreis",
   "pricing.shippingCost": "Versandkosten",
   "pricing.minOrderValue": "Mindestbestellwert",
@@ -149,6 +186,10 @@ function statedFact(q: SupplierQuote, field: EvidenceField): Fact<unknown> | und
   switch (field) {
     case "identity.gtin":
       return q.identity.gtin;
+    case "identity.brand":
+      return q.identity.brand;
+    case "pricing.minOrderQuantity":
+      return q.pricing.minOrderQuantity;
     case "pricing.unitPrice":
       return q.pricing.unitPrice;
     case "pricing.shippingCost":
@@ -174,9 +215,25 @@ function statedFact(q: SupplierQuote, field: EvidenceField): Fact<unknown> | und
   }
 }
 
+/** Produktbezug einer Abfrage: GTIN oder – nur ohne GTIN – der Varianten-Schlüssel. */
+export interface EvidenceTarget {
+  gtin?: string;
+  productKey?: string;
+}
+
+/**
+ * Gilt ein Nachweis für dieses Produkt? Über die GTIN (andere Schreibweise derselben Nummer zählt; eingeschränkte
+ * Nummern nur übergangsweise für dieselbe Demo-GTIN, siehe identity.ts) oder – nur wenn die Abfrage KEINE GTIN hat –
+ * über denselben Varianten-Schlüssel.
+ */
+export function evidenceAppliesTo(e: Pick<EvidenceEntry, "productGtin" | "productKey">, target: EvidenceTarget): boolean {
+  if (target.gtin !== undefined) return e.productGtin !== undefined && sameGtinOrDemoGtin(e.productGtin, target.gtin);
+  return target.productKey !== undefined && e.productKey !== undefined && e.productKey === target.productKey;
+}
+
 /**
  * Wendet die Nachweise auf ein importiertes Angebot an. Nur Nachweise für genau dieses Angebot und genau
- * dieses Produkt (GTIN) zählen; alles andere bleibt unverändert.
+ * dieses Produkt (GTIN bzw. Varianten-Schlüssel) zählen; alles andere bleibt unverändert.
  *
  * Nicht angewendet (Angabe bleibt „vom Lieferanten angegeben“ bzw. „fehlt“, der Grund wird gemeldet) wird ein Nachweis,
  * - der der aktuellen Preisliste widerspricht (z. B. Preis, Bestand, Zahlungsbedingung seit der Prüfung geändert),
@@ -188,11 +245,14 @@ function statedFact(q: SupplierQuote, field: EvidenceField): Fact<unknown> | und
 export function applyEvidence(
   quote: SupplierQuote,
   offerKey: string,
-  productGtin: string | undefined,
+  /** GTIN des gesuchten Produkts oder vollständiger Produktbezug (GTIN bzw. Varianten-Schlüssel) */
+  product: string | undefined | EvidenceTarget,
   entries: EvidenceEntry[],
   options: { articleChangedAt?: string } = {},
 ): SupplierQuote {
-  const relevant = entries.filter((e) => e.offerKey === offerKey && productGtin !== undefined && e.productGtin === productGtin);
+  const target: EvidenceTarget = typeof product === "object" ? product : { gtin: product };
+  // GTIN-Vergleich über den GTIN-Kern: andere Schreibweise derselben Nummer (13/14 Stellen) gilt, eingeschränkte Nummern nicht.
+  const relevant = entries.filter((e) => e.offerKey === offerKey && evidenceAppliesTo(e, target));
   if (!relevant.length) return quote;
   const q: SupplierQuote = structuredClone(quote);
   const conflicts: string[] = [];
@@ -232,6 +292,9 @@ export function applyEvidence(
       case "identity.gtin":
         q.identity.gtin = fact(e.value as string);
         break;
+      case "identity.brand":
+        q.identity.brand = fact(e.value as string);
+        break;
       case "safety.ceMarking":
         q.safety.ceMarking = fact(e.value as boolean);
         break;
@@ -242,7 +305,13 @@ export function applyEvidence(
         q.safety.safetyInformationDe = fact(e.value as boolean);
         break;
       case "safety.document":
+        // Ohne gültigen Typ (nur bei ungeprüft übergebenen Einträgen möglich) zählt die Unterlage für keine Pflicht.
+        if (!isDocType(e.docType)) {
+          conflicts.push(`Nachweis „${e.document}“ zu Unterlagen ohne Dokumenttyp – erfüllt keine Pflicht, bitte docType ergänzen.`);
+          break;
+        }
         q.safety.documents = [...q.safety.documents, `${e.value as string} (geprüft ${e.checkedAt})`];
+        q.safety.documentTypes = sortDocTypes([...(q.safety.documentTypes ?? []), e.docType]);
         break;
       case "pricing.unitPrice":
         q.pricing.unitPrice = fact(e.value as number);
@@ -252,6 +321,9 @@ export function applyEvidence(
         break;
       case "pricing.minOrderValue":
         q.pricing.minOrderValue = fact(e.value as number);
+        break;
+      case "pricing.minOrderQuantity":
+        q.pricing.minOrderQuantity = fact(e.value as number);
         break;
       case "pricing.importCost":
         q.pricing.importCost = fact(e.value as number);
@@ -280,8 +352,14 @@ export function applyEvidence(
       case "dropshipping.orderChannel":
         q.dropshipping.orderChannel = fact(e.value as OrderChannel) as DropshippingSupport["orderChannel"];
         break;
+      case "dropshipping.returnsHandledBy":
+        q.dropshipping.returnsHandledBy = fact(e.value as "supplier" | "shop");
+        break;
       case "payment.terms":
         q.payment.terms = fact(e.value as SupplierPaymentTerms);
+        break;
+      case "payment.creditLimit":
+        q.payment.creditLimit = fact(e.value as number);
         break;
       case "payment.requiresBusinessVerification":
         q.payment.requiresBusinessVerification = fact(e.value as boolean);

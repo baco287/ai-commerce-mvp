@@ -75,8 +75,14 @@ export function evaluatePipeline(
   step("compliance", compliance === "freigegeben", `Status „${compliance}“ – CE/GPSR/Registrierungen müssen geprüft sein.`);
 
   let input: ProductSetInput | undefined;
-  if (listing) input = buildProductSetInput(analysis, listing);
-  const violations = input ? productInputViolations(input) : ["Keine Shop-Angaben (Titel, Varianten, Texte) vorhanden."];
+  let refused: string | undefined;
+  try {
+    if (listing) input = buildProductSetInput(analysis, listing);
+  } catch (e) {
+    // Demo-Weg mit echtem Lieferantenangebot als Basis: kein Entwurf (Konditionen echter Lieferanten nie nach Shopify)
+    refused = e instanceof Error ? e.message : String(e);
+  }
+  const violations = refused ? [refused] : input ? productInputViolations(input) : ["Keine Shop-Angaben (Titel, Varianten, Texte) vorhanden."];
   step(
     "draft",
     violations.length === 0,

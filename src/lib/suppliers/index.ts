@@ -15,6 +15,7 @@ export * from "./dashboard";
 export * from "./links";
 export {
   DEMO_ADAPTERS,
+  DEMO_DOC_TYPES,
   DEMO_QUERIES,
   DEMO_REQUIRED_DOCUMENTS,
   DEMO_SUPPLIER_QUOTES,
@@ -22,3 +23,7 @@ export {
   demoQuotesFor,
   type DemoProductId,
 } from "./demo/demo-suppliers";
+export * from "./identity";
+export * from "./documents";
+export * from "./liquidity";
+export * from "./variant-match";

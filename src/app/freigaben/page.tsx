@@ -1,5 +1,6 @@
 import { Lock, ShieldCheck } from "lucide-react";
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import { ApprovalQueue } from "@/components/approvals/approval-queue";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -10,7 +11,9 @@ import { formatEur, formatEur0, formatPercent } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Freigaben & Budget" };
 
-export default function ApprovalsPage() {
+export default async function ApprovalsPage() {
+  // Dynamisch je Anfrage: Die Seite liest lokale Laufzeitdaten (.data/) – nie beim Build vorrendern (Paket I).
+  await connection();
   const approvals = getApprovals();
   const agentNames = Object.fromEntries(getAgents().map((a) => [a.id, a.name]));
 

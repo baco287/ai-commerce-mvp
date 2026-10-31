@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getProductAnalyses } from "@/lib/data";
-import type { ProductSetInput } from "./product-input";
+import { buildDraftInput, type ProductSetInput } from "./product-input";
 import type { ShopifyProduct, VariantInventory } from "./reconcile";
 import { planRepairs } from "./repair";
 import { planProductSync } from "./sync";
@@ -24,7 +24,7 @@ function live(exp: ProductSetInput, n: number, opts: { tracked?: boolean; availa
       const inventory: VariantInventory = {
         tracked: opts.tracked ?? false,
         quantity: opts.available ?? 0,
-        unitCost: v.inventoryItem.cost,
+        unitCost: v.inventoryItem.cost ?? null,
         locationsTruncated: false,
         locations: [{ locationId: LOCATION, locationName: "Standort 1", locationActive: null, available: opts.available ?? 0, onHand: 0, committed: 0, incoming: 0 }],
       };
@@ -141,5 +141,39 @@ describe("Reparatur-Planung: Konflikte und Sonderfälle", () => {
     const plan = planRepairs({ expected: exp, shopify: exp.slice(1).map((e, i) => live(e, i + 2)), inventoryComplete: true, productsComplete: false });
     expect(plan.actions).toEqual([]);
     expect(plan.manual).toEqual(expect.arrayContaining([expect.objectContaining({ handle: exp[0].handle, actual: "nicht gefunden" })]));
+  });
+});
+
+describe("Reparatur-Planung: Phase 1 – echte Entwürfe erst mit Freigabe-Akte (Paket I)", () => {
+  /** NUR TEST: echte (nicht als Demo gekennzeichnete) Entwurfs-Eingabe */
+  const realDraft = () =>
+    buildDraftInput({
+      demo: false,
+      productRef: "catalog:kabelkanal",
+      listing: { handle: "kabelkanal", title: "Kabelkanal selbstklebend", descriptionHtml: "<p>Kabelkanal</p>", productType: "Kabelmanagement", categoryTag: "buero" },
+      variants: [{ shopSku: "KK-1", priceGross: 39.9 }],
+      images: [{ url: "https://bilder.example/kabelkanal.jpg", alt: "Kabelkanal" }],
+      vendor: "Kabelfix",
+    });
+
+  it("plant für eine echte Eingabe kein create-draft, sondern einen gesperrten Eintrag", () => {
+    const plan = planRepairs({ expected: [realDraft()], shopify: [], ...complete });
+    expect(plan.actions).toEqual([]);
+    expect(plan.blocked).toEqual(["kabelkanal: echter Entwurf – Anlage erst mit Freigabe-Akte (Phase 2)."]);
+  });
+
+  it("behandelt gemischte Demo-Kennzeichen wie eine echte Eingabe", () => {
+    const [demo] = expected();
+    const mixed: ProductSetInput = { ...demo, handle: "lichtleiste-ohne-demo-praefix" };
+    const plan = planRepairs({ expected: [mixed], shopify: [], ...complete });
+    expect(plan.actions.map((a) => a.operation.kind)).not.toContain("create-draft");
+    expect(plan.blocked.join(" ")).toMatch(/Freigabe-Akte/);
+  });
+
+  it("fügt einem Nicht-Demo-Produkt kein Demo-Bild hinzu", () => {
+    const [demo] = expected();
+    const product = { ...live(demo, 1), tags: [], handle: demo.handle.replace(/^demo-/, ""), variants: live(demo, 1).variants.map((v) => ({ ...v, sku: "ECHT-1" })) };
+    const plan = planRepairs({ expected: [{ ...demo, handle: product.handle }], shopify: [product], ...complete });
+    expect(plan.actions.map((a) => a.operation.kind)).not.toContain("add-image");
   });
 });

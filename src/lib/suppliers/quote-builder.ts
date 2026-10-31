@@ -32,6 +32,7 @@ export function buildQuote(o: QuoteOverrides): SupplierQuote {
       safetyInformationDe: ok(true),
       openIssues: [],
       documents: ["Konformitätserklärung (Demo)"],
+      documentTypes: ["eu_doc"],
     },
     pricing: { unitPrice: ok(10), shippingCost: ok(3), importCost: ok(0), minOrderQuantity: ok(1), minOrderValue: ok(0) },
     fulfillment: { shipsFrom: ok("DE"), deliversToDestination: ok(true), deliveryDays: ok({ min: 2, max: 4 }), stock: ok(500), tracking: ok(true) },
@@ -44,7 +45,9 @@ export function buildQuote(o: QuoteOverrides): SupplierQuote {
     ...base,
     ...o,
     identity: { ...base.identity, ...o.identity },
-    safety: { ...base.safety, ...o.safety },
+    // Werden Unterlagen überschrieben, gelten deren Typen nur, wenn sie ausdrücklich mitgegeben werden – Freitext
+    // allein erfüllt nie eine Pflicht (documents.ts).
+    safety: { ...base.safety, ...(o.safety?.documents !== undefined && { documentTypes: [] }), ...o.safety },
     pricing: { ...base.pricing, ...o.pricing },
     fulfillment: { ...base.fulfillment, ...o.fulfillment },
     dropshipping: { ...base.dropshipping, ...o.dropshipping },

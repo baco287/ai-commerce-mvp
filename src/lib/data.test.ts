@@ -1,7 +1,35 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getActivities, getDashboardMetrics, getMarketScoutOverview, getOrderRows, getProductAnalyses } from "./data";
 import { DEMO_AGENTS } from "./demo/agents";
 import { DEMO_PRODUCTS } from "./demo/products";
+import * as catalogStore from "./market/server/catalog-store";
+import * as marketStore from "./market/server/market-store";
+import type { CandidateState } from "./market/pipeline";
+import type { MarketState } from "./market/state";
+
+// Das Dashboard (getMarketScoutOverview) darf nur den geschwärzten Stand lesen: kein Katalog, keine
+// zwischengespeicherten Signale, und es schreibt nichts. Alle Funktionen der beiden Speicher werden hier beobachtet.
+const scout = vi.hoisted(() => ({ state: null as MarketState | null }));
+
+vi.mock("@/lib/market/server/market-store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/market/server/market-store")>();
+  const { emptyMarketState } = await import("@/lib/market/state");
+  return {
+    ...actual,
+    loadMarketState: vi.fn(() => ({ state: scout.state ?? emptyMarketState() })),
+    isStopRequested: vi.fn(() => false),
+    loadCachedSignals: vi.fn(() => ({ signals: new Map(), sha256: null })),
+    saveMarketState: vi.fn(),
+    writeJournal: vi.fn(),
+    writeDraftArtifact: vi.fn(),
+    acquireRunLock: vi.fn(),
+    releaseRunLock: vi.fn(),
+  };
+});
+vi.mock("@/lib/market/server/catalog-store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/market/server/catalog-store")>();
+  return { ...actual, loadCatalog: vi.fn(() => ({ products: [], invalid: [], sha256: null })) };
+});
 
 describe("Demo-Datenbasis", () => {
   it("enthält genau fünf Demo-Produkte mit je mindestens drei Angeboten", () => {
@@ -78,5 +106,55 @@ describe("Market Scout im Dashboard", () => {
     // Die Pipeline läuft durch: mindestens ein Dry-Run-Entwurf über die bestehende Shopify-Pipeline
     expect(o.candidates.some((c) => c.latest.draft.status === "dry_run_prepared")).toBe(true);
     expect(o.stopRequested).toBe(false);
+  });
+
+  describe("liest nur den Stand", () => {
+    beforeEach(() => {
+      scout.state = null;
+      vi.clearAllMocks();
+    });
+    afterEach(() => {
+      scout.state = null;
+    });
+
+    /** Weder Katalog noch zwischengespeicherte Signale geladen, nichts geschrieben, keine Sperre angefasst */
+    function expectReadOnly() {
+      expect(vi.mocked(catalogStore.loadCatalog)).not.toHaveBeenCalled();
+      expect(vi.mocked(marketStore.loadCachedSignals)).not.toHaveBeenCalled();
+      expect(vi.mocked(marketStore.saveMarketState)).not.toHaveBeenCalled();
+      expect(vi.mocked(marketStore.writeJournal)).not.toHaveBeenCalled();
+      expect(vi.mocked(marketStore.writeDraftArtifact)).not.toHaveBeenCalled();
+      expect(vi.mocked(marketStore.acquireRunLock)).not.toHaveBeenCalled();
+      expect(vi.mocked(marketStore.releaseRunLock)).not.toHaveBeenCalled();
+    }
+
+    it("lädt in der Demo-Vorschau weder Katalog noch zwischengespeicherte Signale und schreibt nichts", async () => {
+      const o = await getMarketScoutOverview(new Date("2026-10-31T08:00:00Z"));
+      expect(o.origin).toBe("demo");
+      expect(vi.mocked(marketStore.loadMarketState)).toHaveBeenCalled();
+      expectReadOnly();
+    });
+
+    it("sortiert einen gespeicherten Stand nach STATE_ORDER (review_ready vor blocked vor deferred) – unabhängig von der Bewertung", async () => {
+      // Ausgangsstand: Demo-Vorschau, daraus drei Kandidaten mit gezielt gesetztem Zustand und umgekehrter Bewertung
+      const preview = await getMarketScoutOverview(new Date("2026-10-31T08:00:00Z"));
+      const [a, b, c] = preview.candidates;
+      const as = (sc: (typeof preview.candidates)[number], state: CandidateState, score: number) => ({
+        ...sc,
+        latest: { ...sc.latest, state, score: { ...sc.latest.score, score } },
+      });
+      const stored = [as(a, "deferred", 90), as(b, "review_ready", 10), as(c, "blocked", 50)];
+      scout.state = {
+        version: 1,
+        candidates: Object.fromEntries(stored.map((sc) => [sc.latest.candidate.key, sc])),
+        runs: [preview.lastRun!],
+      };
+      vi.clearAllMocks();
+      const o = await getMarketScoutOverview(new Date("2026-10-31T08:00:00Z"));
+      expect(o.origin).toBe("stored");
+      expect(o.candidates.map((sc) => sc.latest.state)).toEqual(["review_ready", "blocked", "deferred"]);
+      expect(o.candidates.map((sc) => sc.latest.candidate.key)).toEqual([b.latest.candidate.key, c.latest.candidate.key, a.latest.candidate.key]);
+      expectReadOnly();
+    });
   });
 });

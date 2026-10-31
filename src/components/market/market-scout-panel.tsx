@@ -20,6 +20,7 @@ const STATE_TONES: Record<CandidateState, BadgeTone> = {
   unreviewed: "neutral",
   deferred: "blue",
   blocked: "amber",
+  review_ready: "cyan",
   approved: "green",
   draft_created: "cyan",
 };
@@ -46,6 +47,9 @@ function CandidateCard({ c }: { c: StoredCandidate }) {
   const r = c.latest;
   const interest = r.candidate.signals.find((s) => s.interest);
   const sim = r.candidate.signals.find((s) => s.simulated);
+  // Geschwärzter echter Kandidat: Lieferant, Einkauf und Marge stehen nur im lokalen Journal (nie in state.json)
+  const confidential = r.redacted === true && r.stages.some((s) => s.key === "supplier" && s.status === "ok");
+  const profitConfidential = r.redacted === true && r.stages.some((s) => s.key === "profit" && s.status !== "skipped");
   return (
     <li className="rounded-xl border border-line bg-surface-2/40 p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -78,6 +82,8 @@ function CandidateCard({ c }: { c: StoredCandidate }) {
                 {r.supplier.demo && !/demo/i.test(r.supplier.supplierName) ? " (Demo)" : ""} · {formatEur(r.supplier.perUnit)} · {formatDays(r.supplier.deliveryDays.min, r.supplier.deliveryDays.max)}
                 {r.supplier.requiresPrefinancing ? " · Vorfinanzierung nötig" : ""}
               </>
+            ) : confidential ? (
+              "Vertraulich – nur im lokalen Journal"
             ) : (
               "Keiner gefunden"
             )}
@@ -90,6 +96,8 @@ function CandidateCard({ c }: { c: StoredCandidate }) {
               <>
                 {formatEur(r.profit.contribution)} ({formatPercent(r.profit.marginPercent)}){r.profit.reliable ? "" : " – nicht verlässlich"}
               </>
+            ) : profitConfidential ? (
+              "Vertraulich – nur im lokalen Journal"
             ) : (
               "Nicht berechenbar"
             )}
@@ -100,7 +108,8 @@ function CandidateCard({ c }: { c: StoredCandidate }) {
           <dd className="mt-0.5 text-fg">
             {r.draft.status === "dry_run_prepared" ? (
               <span className="inline-flex items-center gap-1">
-                <FileText className="size-3.5 text-cyan-300" aria-hidden /> Dry-Run vorbereitet, nicht angelegt
+                <FileText className="size-3.5 text-cyan-300" aria-hidden /> Dry-Run vorbereitet
+                {r.draft.complete === undefined ? "" : r.draft.complete ? " (vollständig)" : " (unvollständig)"}, nicht angelegt
               </span>
             ) : (
               "Nicht vorbereitet"

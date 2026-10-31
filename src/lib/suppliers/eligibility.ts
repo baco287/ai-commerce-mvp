@@ -3,6 +3,7 @@
 // die vor einer Freigabe geklärt werden müssen und die Bewertung leicht mindern.
 
 import { isValidTermDays } from "./financing";
+import { GTIN_CLASS_LABELS, gtinClass, isDemoGtin, sameGtin, sameGtinDigits, sameGtinOrDemoGtin } from "./identity";
 import { EU_COUNTRIES, factValue, isConfirmed, type Fact, type ProductQuery, type SupplierQuote } from "./model";
 import { SCOUT_RULES, type ScoutRules } from "./rules";
 
@@ -77,16 +78,24 @@ export function checkEligibility(q: SupplierQuote, query: ProductQuery, rules: S
   const warn = (code: string, message: string) => warnings.push({ code, message });
 
   // --- Produktidentität ------------------------------------------------------
+  // Vergleich nur über den GTIN-Kern (identity.ts): Eine bestätigte GTIN belegt die Identität nur, wenn sie global
+  // eindeutig ist (bzw. bei Demo-Angeboten dieselbe fiktive Demo-GTIN). Abweichung = andere Nummer nach Normalisierung.
   const gtin = factValue(q.identity.gtin);
-  const gtinMatches = query.gtin !== undefined && isConfirmed(q.identity.gtin, (v) => v === query.gtin);
-  if (query.gtin !== undefined && gtin !== undefined && gtin !== query.gtin) {
+  const gtinMatches = query.gtin !== undefined && isConfirmed(q.identity.gtin, (v) => sameGtin(v, query.gtin) || (q.demo && sameGtinOrDemoGtin(v, query.gtin)));
+  if (query.gtin !== undefined && gtin !== undefined && !sameGtinDigits(gtin, query.gtin)) {
     exclude("identity_mismatch", `GTIN ${gtin} weicht vom gesuchten Produkt (${query.gtin}) ab.`);
+  } else if (!q.demo && gtin !== undefined && gtinClass(gtin) === "trade_unit") {
+    // Umverpackungs-GTIN (Karton): Der Lieferant verkauft womöglich nur ganze Gebinde – verdeckte Mindestabnahme.
+    exclude("stock_purchase_required", `GTIN ${gtin} kennzeichnet eine Umverpackung – Einzelstück-GTIN nachtragen (verdeckte Mindestabnahme).`);
   } else if (isConfirmed(q.identity.match, (m) => m === "different")) {
     exclude("identity_mismatch", "Lieferant führt ein anderes Produkt.");
   } else if (!gtinMatches && !isConfirmed(q.identity.match, (m) => m === "exact")) {
     const match = factValue(q.identity.match);
     const detail = match === "variant" ? "nur ähnliche Variante" : `Abgleich ${statusText(q.identity.match)}`;
     exclude("identity_unconfirmed", `Produktidentität nicht bestätigt (${detail}).`);
+  }
+  if (!q.demo && gtin !== undefined && !isDemoGtin(gtin) && (gtinClass(gtin) === "restricted" || gtinClass(gtin) === "invalid")) {
+    warn("gtin_not_global", `GTIN ${gtin}: ${GTIN_CLASS_LABELS[gtinClass(gtin)]} – zählt nicht als Identitätsbeleg.`);
   }
 
   // --- Produktsicherheit -----------------------------------------------------

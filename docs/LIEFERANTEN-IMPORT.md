@@ -89,6 +89,7 @@ nur beim Start des Befehls.
 | GTIN/EAN | – | GTIN, EAN, EAN13, Barcode, UPC | 8/12/13/14 Ziffern mit gültiger Prüfziffer |
 | Marke | – | Marke, Brand | Text |
 | Herstellerartikelnummer | – | Herstellerartikelnummer, MPN | Text |
+| Variantenkennung | – | Variante, Variant, Variantenkennung | Text (höchstens 60 Zeichen), z. B. `Schwarz / 2 m` – Zuordnung zu Katalogvarianten ohne GTIN und MPN |
 | Artikelbezeichnung | ja | Bezeichnung, Artikel, Produktname, Title, Name | Text |
 | Einkaufspreis netto | ja | EK netto, Einkaufspreis, Preis netto, Net Price, Unit Price | `12,50` · `12.50` · `1.234,50` · `1,234.50` |
 | Währung | ja¹ | Währung, Currency | nur `EUR` |
@@ -133,7 +134,7 @@ Beispiel: `src/lib/suppliers/import/fixtures/zuordnung-abweichend.json`.
 | Datei nicht UTF-8 | Datei wird nicht übernommen |
 | Gleiche Lieferant + Artikelnummer mehrfach, identisch | einmal übernommen, Dublette gemeldet |
 | Gleiche Lieferant + Artikelnummer mehrfach, widersprüchlich | alle betroffenen Zeilen abgelehnt |
-| GTIN unbekannt oder fehlt | gespeichert, aber keinem Produkt zugeordnet |
+| GTIN unbekannt oder fehlt | gespeichert; echte Zeilen nur über den Zielproduktkatalog zuordenbar, synthetische nur über Demo-GTINs |
 | Optionale Angabe fehlt | Hinweis „bleibt fehlend“ |
 | Preisliste älter als 90 Tage oder Datum in der Zukunft | Hinweis |
 
@@ -181,15 +182,28 @@ Nachweis vorliegt.
 ```
 
 - `offerKey` steht im Testlauf und in `--status`; `productGtin` ist die GTIN des Produkts, für das der Nachweis gilt.
+  Für Varianten des Zielproduktkatalogs **ohne GTIN** steht statt `productGtin` der Varianten-Schlüssel
+  `productKey` (`"cat:<Katalog-ID>:<shopSku>"`). Genau eines der beiden Felder ist Pflicht; ein `productKey`-Nachweis gilt
+  nur für eine Abfrage ohne GTIN.
 - **Produktspezifisch:** Ein Nachweis gilt nur für genau dieses Angebot **und** genau dieses Produkt. Eine
   CE-Erklärung für Produkt A macht Produkt B nie „geprüft“.
-- Nachweisbare Felder: `identity.match`, `identity.gtin`, `safety.ceMarking`, `safety.euResponsiblePerson`,
-  `safety.safetyInformationDe`, `safety.document` (z. B. `"Herstellerangaben (GPSR)"` – deckt die gleichnamige
-  Pflichtunterlage ab), `pricing.unitPrice`, `pricing.shippingCost`, `pricing.minOrderValue`, `pricing.importCost`,
-  `fulfillment.shipsFrom` (ISO-Code, z. B. `"PL"`), `fulfillment.deliversToDestination`, `fulfillment.deliveryDays` (`{"min":2,"max":4}`), `fulfillment.stock`,
-  `fulfillment.tracking`, `dropshipping.supported`, `dropshipping.blindShipping`, `dropshipping.orderChannel`
-  (`api`/`portal`/`email`), `payment.terms` (`{"kind":"net_terms","days":30}` oder `{"kind":"prepayment"}`),
-  `payment.requiresBusinessVerification`, `reliability.sampleTested`.
+- Nachweisbare Felder: `identity.match`, `identity.gtin`, `identity.brand` (Text, höchstens 80 Zeichen),
+  `safety.ceMarking`, `safety.euResponsiblePerson`, `safety.safetyInformationDe`, `safety.document`,
+  `pricing.unitPrice`, `pricing.shippingCost`, `pricing.minOrderValue`, `pricing.minOrderQuantity` (ganze Zahl ≥ 1),
+  `pricing.importCost`, `fulfillment.shipsFrom` (ISO-Code, z. B. `"PL"`), `fulfillment.deliversToDestination`,
+  `fulfillment.deliveryDays` (`{"min":2,"max":4}`), `fulfillment.stock`, `fulfillment.tracking`, `dropshipping.supported`,
+  `dropshipping.blindShipping`, `dropshipping.orderChannel` (`api`/`portal`/`email`), `dropshipping.returnsHandledBy`
+  (`"supplier"` = der Lieferant nimmt Retouren zurück **und** schreibt den Warenwert gut; `"shop"` = Retouren laufen über
+  uns), `payment.terms` (`{"kind":"net_terms","days":30}` oder `{"kind":"prepayment"}`), `payment.creditLimit`
+  (Kreditrahmen in EUR, Zahl ≥ 0), `payment.requiresBusinessVerification`, `reliability.sampleTested`.
+- **Unterlagen (`safety.document`) brauchen einen festen Dokumenttyp** `docType`; `value` ist der Titel der Unterlage:
+  `{ "field": "safety.document", "docType": "gpsr", "value": "Herstellerangaben (GPSR)", … }`. Erlaubte Typen:
+  `eu_doc` (Konformitätserklärung), `red_doc` (Funk/RED), `weee`, `battg`, `gpsr`, `food_contact`, `cpnp`,
+  `safety_assessment`, `magnet_warning`, `trademark_license`. Nur der Typ erfüllt eine Pflichtunterlage – Freitext nie.
+  Einträge ohne gültigen `docType` werden verworfen; `docType` bei anderen Feldern ebenfalls.
+- Kreditrahmen und Retourenabwicklung liefert eine Preisliste nie – sie bleiben „fehlt“, bis ein Nachweis vorliegt.
+  Marke und Mindestbestellmenge aus der Preisliste sind „vom Lieferanten angegeben“; ein Nachweis mit anderem Wert als
+  die Preisliste gilt nicht.
 - Ungültige Einträge werden mit Grund verworfen (`npm run suppliers:import -- --status`) und nie angewendet –
   auch ein Prüfdatum, das es nicht gibt (`2026-02-31`) oder das in der Zukunft liegt.
 - **Veraltete Nachweise:** Widerspricht ein Nachweis der aktuellen Preisliste (z. B. Preis, Bestand oder
@@ -197,15 +211,20 @@ Nachweis vorliegt.
   angegeben“, und `/lieferanten` zeigt den Widerspruch als offenen Punkt. Dann neu prüfen und den Nachweis aktualisieren.
 - **Widersprüchliche Nachweise:** Zwei Nachweise zum selben Feld mit unterschiedlichem Wert heben sich auf – keiner gilt,
   bis der Widerspruch geklärt ist (alten Eintrag entfernen).
-- **Artikeländerung:** Ändert der Lieferant Bezeichnung, Marke, Herstellernummer oder GTIN eines Angebots, gelten
+- **Artikeländerung:** Ändert der Lieferant Bezeichnung, Marke, Herstellernummer, GTIN oder Variantenkennung eines Angebots, gelten
   Identitäts-, Sicherheits- und Musternachweise, die **vor oder am Tag** dieser Änderung geprüft wurden, nicht mehr – geprüft wurde
   dann womöglich ein anderer Artikel. Eine reine Preis- oder Bestandsänderung berührt sie nicht.
 - Ob CE überhaupt nötig ist, entscheidet das Produkt (`ProductQuery.safety.ceRequired`), welche Unterlagen nötig
-  sind, `requiredDocuments` – beides produktspezifisch zu prüfen.
+  sind, `requiredDocTypes` (feste Dokumenttypen; `requiredDocuments` sind nur die Anzeigenamen) – beides
+  produktspezifisch zu prüfen. Der Abgleich liegt einmal in `src/lib/suppliers/documents.ts`.
 
 ## Wie der Scout importierte Angebote bewertet
 
-1. **Zuordnung nur über die GTIN.** Angebote ohne oder mit unbekannter GTIN erscheinen bei keinem Produkt.
+1. **Getrennte Wege, Zuordnung nur über die Produktidentität.** Synthetische Testdaten (`--synthetisch`) erreichen
+   ausschließlich die Demo-Produkte (über deren fiktive Demo-GTIN). **Echte Zeilen erreichen Demo-Produkte nie** – auch
+   nicht mit einer Demo-GTIN –, sondern nur Katalogkandidaten des Market Scout (global eindeutige GTIN bzw.
+   Artikelnummer + MPN/Variantenkennung, siehe [MARKET-SCOUT.md](MARKET-SCOUT.md)). Der Import zeigt für echte Zeilen
+   deshalb keine Demo-Zuordnung; `/lieferanten` zählt echte Zeilen als zugeordnet, wenn eine Katalogvariante sie nennt.
 2. **Gleiche Eignungsprüfung wie für alle Angebote** (`checkEligibility`): Produktidentität, CE/GPSR/Sicherheitshinweise,
    Dropshipping, Lieferung nach DE, Bestand, Lieferzeit, Mindestabnahme, **Mindestbestellwert** (darf keinen
    Vorratskauf erzwingen), Kosten. Zusätzlich gilt für Preislisten: **Einkaufspreis, Versandkosten, Versandland,

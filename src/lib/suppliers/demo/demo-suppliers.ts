@@ -11,19 +11,32 @@
 // ausgewogen mit Zahlungsziel, unbestätigte Angaben – und Angebote, die ausgeschlossen werden müssen.
 
 import type { SupplierAdapter } from "../adapter";
-import { missing, supplierStated, type PaymentConditions, type ProductQuery, type SupplierQuote } from "../model";
+import { DOC_TYPE_LABELS } from "../documents";
+import { missing, supplierStated, type DocType, type PaymentConditions, type ProductQuery, type SupplierQuote } from "../model";
 import { buildQuote, ok, type QuoteOverrides } from "../quote-builder";
 
-/** Pflichtunterlagen je Produkt – Namen müssen mit den Dokumentbezeichnungen der Angebote beginnen. */
+/** Dokumenttyp je Demo-Unterlage – der Abgleich läuft ausschließlich über diese Typen (documents.ts). */
+export const DEMO_DOC_TYPES = {
+  ce: "eu_doc",
+  red: "red_doc",
+  weee: "weee",
+  gpsr: "gpsr",
+  magnets: "magnet_warning",
+  foodContact: "food_contact",
+  trademark: "trademark_license",
+} as const satisfies Record<string, DocType>;
+export type DemoDocKey = keyof typeof DEMO_DOC_TYPES;
+
+/** Pflichtunterlagen je Produkt (Anzeigenamen = DOC_TYPE_LABELS des zugehörigen Typs). */
 export const DEMO_REQUIRED_DOCUMENTS = {
-  ce: "Konformitätserklärung",
-  red: "Prüfbericht Funk/EMV (RED)",
-  weee: "WEEE-Registrierungsnummer",
-  gpsr: "Herstellerangaben (GPSR)",
-  magnets: "Warnhinweis Magnete/Kleinteile",
-  foodContact: "Konformität Lebensmittelkontakt (LFGB/EU 1935/2004)",
-  trademark: "Kompatibilitätsangaben ohne Markenverletzung",
-} as const;
+  ce: DOC_TYPE_LABELS.eu_doc,
+  red: DOC_TYPE_LABELS.red_doc,
+  weee: DOC_TYPE_LABELS.weee,
+  gpsr: DOC_TYPE_LABELS.gpsr,
+  magnets: DOC_TYPE_LABELS.magnet_warning,
+  foodContact: DOC_TYPE_LABELS.food_contact,
+  trademark: DOC_TYPE_LABELS.trademark_license,
+} as const satisfies Record<DemoDocKey, string>;
 const D = DEMO_REQUIRED_DOCUMENTS;
 
 const query = (
@@ -31,29 +44,31 @@ const query = (
   title: string,
   gtin: string,
   ceRequired: boolean,
-  requiredDocuments: string[],
+  required: DemoDocKey[],
 ): ProductQuery & { gtin: string } => ({
   productId,
   title,
   gtin,
+  requiredDocTypes: required.map((k) => DEMO_DOC_TYPES[k]),
   quantity: 1,
   destinationCountry: "DE",
-  safety: { ceRequired, requiredDocuments },
+  safety: { ceRequired, requiredDocuments: required.map((k) => D[k]) },
 });
 
 /** Suchanfragen für die Demo-Produkte aus src/lib/demo/products.ts */
 export const DEMO_QUERIES = {
-  "p-led": query("p-led", "LED-Lichtleiste mit App-Steuerung (5 m)", "2000000000015", true, [D.ce, D.red, D.weee]),
-  "p-stand": query("p-stand", "Faltbarer Laptopständer aus Aluminium", "2000000000022", false, [D.gpsr]),
-  "p-cable": query("p-cable", "Magnetische Kabel-Organizer (10er-Set)", "2000000000039", false, [D.gpsr, D.magnets]),
-  "p-bottle": query("p-bottle", "Isolierte Edelstahl-Trinkflasche 750 ml", "2000000000046", false, [D.gpsr, D.foodContact]),
-  "p-band": query("p-band", "Silikon-Uhrenarmband (3er-Set)", "2000000000053", false, [D.gpsr, D.trademark]),
+  "p-led": query("p-led", "LED-Lichtleiste mit App-Steuerung (5 m)", "2000000000015", true, ["ce", "red", "weee"]),
+  "p-stand": query("p-stand", "Faltbarer Laptopständer aus Aluminium", "2000000000022", false, ["gpsr"]),
+  "p-cable": query("p-cable", "Magnetische Kabel-Organizer (10er-Set)", "2000000000039", false, ["gpsr", "magnets"]),
+  "p-bottle": query("p-bottle", "Isolierte Edelstahl-Trinkflasche 750 ml", "2000000000046", false, ["gpsr", "foodContact"]),
+  "p-band": query("p-band", "Silikon-Uhrenarmband (3er-Set)", "2000000000053", false, ["gpsr", "trademark"]),
 } satisfies Record<string, ProductQuery>;
 
 export type DemoProductId = keyof typeof DEMO_QUERIES;
 
 const said = <T>(value: T) => supplierStated(value, "Selbstauskunft Lieferant (Demo)");
-const docs = (...names: string[]) => names.map((n) => `${n} (Demo)`);
+/** Demo-Unterlagen: Anzeigetext „<Name> (Demo)“ UND Dokumenttyp (nur der Typ zählt für die Pflicht). */
+const docs = (...keys: DemoDocKey[]) => ({ documents: keys.map((k) => `${D[k]} (Demo)`), documentTypes: keys.map((k) => DEMO_DOC_TYPES[k]) });
 
 const PREPAYMENT: Partial<PaymentConditions> = {
   terms: ok({ kind: "prepayment" }),
@@ -79,7 +94,7 @@ const EU_WHOLESALE: SupplierQuote[] = [
     id: "demo-eu:eurolight:p-led",
     supplierId: "eurolight",
     supplierName: "EuroLight Fulfillment (Demo)",
-    safety: { documents: docs(D.ce, D.red) }, // WEEE-Nummer fehlt noch
+    safety: { ...docs("ce", "red") }, // WEEE-Nummer fehlt noch
     pricing: { unitPrice: ok(8.4), shippingCost: ok(3.2), importCost: ok(0) },
     fulfillment: { shipsFrom: ok("PL"), deliveryDays: ok({ min: 4, max: 7 }), stock: ok(800) },
     payment: { terms: ok({ kind: "net_terms", days: 14 }), creditLimit: ok(300) },
@@ -89,7 +104,8 @@ const EU_WHOLESALE: SupplierQuote[] = [
     id: "demo-eu:lumio:p-led",
     supplierId: "lumio",
     supplierName: "Lumio Großhandel (Demo)",
-    safety: { documents: docs(D.ce, D.red, D.weee) },
+    // Vollständig: auch die GPSR-Herstellerangaben, die die Risikoregeln für jedes Produkt verlangen (market/risk.ts)
+    safety: { ...docs("ce", "red", "weee", "gpsr") },
     pricing: { unitPrice: ok(10.9), shippingCost: ok(2.9), importCost: ok(0) },
     fulfillment: { shipsFrom: ok("DE"), deliveryDays: ok({ min: 2, max: 3 }), stock: ok(350) },
     payment: { terms: ok({ kind: "net_terms", days: 30 }), creditLimit: ok(1000) },
@@ -100,7 +116,7 @@ const EU_WHOLESALE: SupplierQuote[] = [
     id: "demo-eu:voltmarkt:p-led",
     supplierId: "voltmarkt",
     supplierName: "Voltmarkt Restposten (Demo)",
-    safety: { ceMarking: missing(), safetyInformationDe: said(true), documents: [] },
+    safety: { ceMarking: missing(), safetyInformationDe: said(true), ...docs() },
     pricing: { unitPrice: ok(7.5), shippingCost: ok(2.9), importCost: ok(0) },
     fulfillment: { shipsFrom: ok("DE"), deliveryDays: ok({ min: 2, max: 4 }), stock: ok(140) },
     payment: PREPAYMENT,
@@ -119,7 +135,7 @@ const EU_WHOLESALE: SupplierQuote[] = [
     id: "demo-eu:deskpro:p-stand",
     supplierId: "deskpro",
     supplierName: "DeskPro Supply (Demo)",
-    safety: { documents: docs(D.gpsr) },
+    safety: { ...docs("gpsr") },
     pricing: { unitPrice: ok(11.2), shippingCost: ok(3.9), importCost: ok(0) },
     fulfillment: { shipsFrom: ok("NL"), deliveryDays: ok({ min: 3, max: 6 }), stock: ok(420) },
     // Zahlungsziel nur behauptet → gilt bis zur Bestätigung als Vorfinanzierung
@@ -130,7 +146,7 @@ const EU_WHOLESALE: SupplierQuote[] = [
     id: "demo-eu:ergohandel:p-stand",
     supplierId: "ergohandel",
     supplierName: "ErgoHandel (Demo)",
-    safety: { documents: docs(D.gpsr) },
+    safety: { ...docs("gpsr") },
     pricing: { unitPrice: ok(14.5), shippingCost: ok(3.2), importCost: ok(0) },
     fulfillment: { shipsFrom: ok("DE"), deliveryDays: ok({ min: 1, max: 3 }), stock: ok(120) },
     reliability: { rating: ok(4.7), onTimeRate: missing(), defectRate: ok(0.01) },
@@ -151,7 +167,7 @@ const EU_WHOLESALE: SupplierQuote[] = [
     id: "demo-eu:ordnungswerk:p-cable",
     supplierId: "ordnungswerk",
     supplierName: "OrdnungsWerk (Demo)",
-    safety: { documents: docs(D.gpsr, D.magnets) },
+    safety: { ...docs("gpsr", "magnets") },
     pricing: { unitPrice: ok(1.9), shippingCost: ok(2.9), importCost: ok(0) },
     fulfillment: { shipsFrom: ok("CZ"), deliveryDays: ok({ min: 3, max: 5 }), stock: ok(600) },
     payment: PREPAYMENT,
@@ -162,7 +178,7 @@ const EU_WHOLESALE: SupplierQuote[] = [
     id: "demo-eu:kabelfix:p-cable",
     supplierId: "kabelfix",
     supplierName: "Kabelfix (Demo)",
-    safety: { documents: docs(D.gpsr, D.magnets) },
+    safety: { ...docs("gpsr", "magnets") },
     pricing: { unitPrice: ok(2.6), shippingCost: ok(2.7), importCost: ok(0) },
     fulfillment: { shipsFrom: ok("DE"), deliveryDays: ok({ min: 1, max: 2 }), stock: ok(40) },
     payment: { terms: ok({ kind: "net_terms", days: 14 }) },
@@ -174,7 +190,7 @@ const EU_WHOLESALE: SupplierQuote[] = [
     id: "demo-eu:aquatrade:p-bottle",
     supplierId: "aquatrade",
     supplierName: "AquaTrade (Demo)",
-    safety: { documents: docs(D.gpsr) }, // Nachweis Lebensmittelkontakt fehlt
+    safety: { ...docs("gpsr") }, // Nachweis Lebensmittelkontakt fehlt
     pricing: { unitPrice: ok(5.4), shippingCost: ok(3.1), importCost: ok(0) },
     fulfillment: { shipsFrom: ok("FR"), deliveryDays: ok({ min: 4, max: 7 }), stock: ok(1200) },
     payment: PREPAYMENT,
@@ -184,7 +200,7 @@ const EU_WHOLESALE: SupplierQuote[] = [
     id: "demo-eu:trinkgut:p-bottle",
     supplierId: "trinkgut",
     supplierName: "Trinkgut Versand (Demo)",
-    safety: { documents: docs(D.gpsr, D.foodContact) },
+    safety: { ...docs("gpsr", "foodContact") },
     pricing: { unitPrice: ok(6.3), shippingCost: ok(2.8), importCost: ok(0) },
     fulfillment: { shipsFrom: ok("DE"), deliveryDays: ok({ min: 1, max: 3 }), stock: ok(260) },
     // Zahlungsziel erst nach Gewerbeprüfung nutzbar
@@ -197,7 +213,7 @@ const EU_WHOLESALE: SupplierQuote[] = [
     id: "demo-eu:bandhub:p-band",
     supplierId: "bandhub",
     supplierName: "BandHub (Demo)",
-    safety: { documents: docs(D.gpsr) }, // Markenrechts-/Kompatibilitätsprüfung fehlt
+    safety: { ...docs("gpsr") }, // Markenrechts-/Kompatibilitätsprüfung fehlt
     pricing: { unitPrice: ok(1.6), shippingCost: ok(2.8), importCost: ok(0) },
     fulfillment: { shipsFrom: ok("SK"), deliveryDays: ok({ min: 4, max: 6 }), stock: ok(700) },
     // Direktversand bestätigt, neutraler Versand und Bestellweg aber offen
@@ -209,7 +225,7 @@ const EU_WHOLESALE: SupplierQuote[] = [
     id: "demo-eu:armbanddirekt:p-band",
     supplierId: "armbanddirekt",
     supplierName: "Armband-Direkt (Demo)",
-    safety: { documents: docs(D.gpsr, D.trademark) },
+    safety: { ...docs("gpsr", "trademark") },
     pricing: { unitPrice: ok(2.2), shippingCost: ok(2.5), importCost: ok(0) },
     // Bestand nur Selbstauskunft
     fulfillment: { shipsFrom: ok("DE"), deliveryDays: ok({ min: 1, max: 3 }), stock: said(180) },
@@ -225,7 +241,7 @@ const ASIA_MARKETPLACE: SupplierQuote[] = [
     id: "demo-asia:brightline:p-led",
     supplierId: "brightline",
     supplierName: "Brightline Demo Co.",
-    safety: { documents: docs(D.ce) },
+    safety: { ...docs("ce") },
     pricing: { unitPrice: ok(6.2), shippingCost: ok(3.9), importCost: said(1.1) },
     fulfillment: { shipsFrom: ok("CN"), deliveryDays: ok({ min: 9, max: 16 }), stock: ok(2400) },
     dropshipping: { blindShipping: said(true) },
@@ -266,7 +282,7 @@ const ASIA_MARKETPLACE: SupplierQuote[] = [
     id: "demo-asia:homegoods:p-cable",
     supplierId: "homegoods",
     supplierName: "HomeGoods Demo Yiwu",
-    safety: { documents: docs(D.gpsr) }, // Warnhinweis Magnete fehlt
+    safety: { ...docs("gpsr") }, // Warnhinweis Magnete fehlt
     pricing: { unitPrice: ok(1.1), shippingCost: ok(2.4), importCost: said(0.4) },
     fulfillment: { shipsFrom: ok("CN"), deliveryDays: ok({ min: 8, max: 12 }), stock: ok(5000), tracking: said(true) },
     dropshipping: { blindShipping: said(true) },

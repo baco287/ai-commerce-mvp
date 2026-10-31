@@ -96,6 +96,7 @@ const DATA_LABELS: Record<keyof ImportedOfferData, string> = {
   gtin: FIELD_SPECS.gtin.label,
   brand: FIELD_SPECS.brand.label,
   mpn: FIELD_SPECS.mpn.label,
+  variantLabel: FIELD_SPECS.variantLabel.label,
   title: FIELD_SPECS.title.label,
   unitPrice: FIELD_SPECS.unitPrice.label,
   currency: FIELD_SPECS.currency.label,
@@ -195,13 +196,21 @@ export function planImport(input: {
     if (!r.data.gtin) {
       withoutGtin.push(r.key);
       productByKey[r.key] = null;
-      r.warnings.push("Ohne GTIN keinem Produkt zuordenbar – wird gespeichert, aber nicht bewertet.");
+      r.warnings.push(
+        input.synthetic
+          ? "Ohne GTIN keinem Produkt zuordenbar – wird gespeichert, aber nicht bewertet."
+          : "Ohne GTIN – Zuordnung nur über den Zielproduktkatalog (Artikelnummer + MPN/Variantenkennung).",
+      );
     } else {
       const productId = input.knownGtins.get(r.data.gtin) ?? null;
       productByKey[r.key] = productId;
       if (!productId) {
         unknownGtin.push(r.key);
-        r.warnings.push(`GTIN ${r.data.gtin} gehört zu keinem Produkt der Kontrollzentrale – wird gespeichert, aber nicht bewertet.`);
+        r.warnings.push(
+          input.synthetic
+            ? `GTIN ${r.data.gtin} gehört zu keinem Produkt der Kontrollzentrale – wird gespeichert, aber nicht bewertet.`
+            : `GTIN ${r.data.gtin}: echte Zeilen werden über den Zielproduktkatalog zugeordnet, nie über Demo-Produkte.`,
+        );
       }
     }
   }

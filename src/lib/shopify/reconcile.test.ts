@@ -179,4 +179,10 @@ describe("Abgleich mit Bestand (read_inventory)", () => {
       { field: "Bestand DEMO-LED-001", expected: "0", actual: "0+ (unvollständig, mehr als 10 Standorte)" },
     ]);
   });
+
+  it("vergleicht keine Kosten, wenn die Soll-Eingabe keine trägt (echte Entwürfe)", () => {
+    const withoutCost = expected().map((e) => ({ ...e, variants: e.variants.map((v) => ({ ...v, inventoryItem: { ...v.inventoryItem, cost: undefined } })) }));
+    const r = reconcile(withoutCost, [withInventory("demo-led-lichtleiste", { tracked: true, quantity: 0, unitCost: null })]);
+    expect(diffsOf(r)).toEqual([]);
+  });
 });

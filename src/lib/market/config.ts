@@ -23,8 +23,52 @@ export const MARKET_SCAN = Object.freeze({
   minDemandForSupplierCheck: 35,
   /** Ab dieser Unsicherheit (0–1) gilt eine Bewertung als nicht belastbar */
   maxUncertainty: 0.5,
-  /** Ergebnisse älter als diese Tage gelten als veraltet */
+  /**
+   * Ergebnisse älter als diese Tage gelten als veraltet. Zwischengespeicherte Nachfragesignale (state.json) werden nur
+   * bis zu diesem Alter wiederverwendet.
+   */
   staleAfterDays: 7,
+  /**
+   * Unsicherheitsaufschlag (0–1) für ein zwischengespeichertes statt live gemessenes Nachfragesignal.
+   * Konfiguration – Entscheidung des Inhabers offen (Entscheidung 1); 0,1 ist die konservative Voreinstellung.
+   */
+  cachedSignalPenalty: 0.1,
+});
+
+/**
+ * Regeln des Profit Controllers (Stückrechnung je Verkauf). Eingefroren. Konservative Platzhalter – ersetzen, sobald
+ * Gebührenliste und echte Konditionen vorliegen. Konfiguration – Entscheidung des Inhabers offen (Entscheidung 1);
+ * die Werte sind die empfohlenen Voreinstellungen. Retourenquote, Rücksendekosten und Auszahlung stehen in
+ * LIQUIDITY_RULES (src/lib/suppliers/liquidity.ts).
+ */
+export const PROFIT_RULES = Object.freeze({
+  /** Dropshipping-/Bearbeitungsgebühr je Bestellung (EUR) – wird auf die Worst-Case-Stückkosten aufgeschlagen */
+  handlingFeeAssumption: 1.0,
+  /** Mindest-Deckungsbeitrag je Verkauf (EUR) */
+  minContributionEur: 3.0,
+});
+export type ProfitRules = { readonly [K in keyof typeof PROFIT_RULES]: number };
+
+/**
+ * Regeln des Store Managers (lokales Entwurfs-Artefakt, Paket E). Eingefroren.
+ * Konfiguration – Entscheidung des Inhabers offen (Mindestlänge der Beschreibung ist ein konservativer Platzhalter).
+ */
+export const STORE_MANAGER_RULES = Object.freeze({
+  /**
+   * Mindestlänge der Produktbeschreibung (reiner Text ohne HTML und ohne GPSR-Block) für einen vollständigen echten
+   * Entwurf. Demo-Entwürfe tragen gekennzeichnete Platzhaltertexte und sind ausgenommen (wie beim Bild).
+   */
+  minDescriptionChars: 200,
+});
+
+/**
+ * Wann der Agent einen echten Kandidaten „bereit zur Prüfung“ (review_ready) setzen darf – das ist NIE eine Freigabe.
+ * Konfiguration – Entscheidung des Inhabers offen (Entscheidung 4): Darf ein unbelegtes Zahlungsziel
+ * (LIQ_TERM_UNSECURED: deckt den Worst Case, aber Fristbeginn, Kreditrahmen oder Mittel unbelegt) zur Prüfung durch
+ * Menschen vorgelegt werden? Voreinstellung = Vorschlag des Plans: ja, mit Code, nie automatisierbar.
+ */
+export const REVIEW_READY_RULES = Object.freeze({
+  allowUnsecuredTerms: true as boolean,
 });
 
 /** User-Agent nach Wikimedia-Richtlinie: Projekt und Kontaktmöglichkeit. */

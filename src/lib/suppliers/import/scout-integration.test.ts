@@ -12,9 +12,22 @@ import { createPriceListAdapter, outdatedOfferKeys, priceListQuotesFor } from ".
 import type { EvidenceEntry, EvidenceField } from "./evidence";
 import { emptyOfferStore, type ImportedOfferData, type OfferStore, type StoredOffer } from "./types";
 
-const STAND = DEMO_QUERIES["p-stand"];
+/** NUR TEST: gültige GS1-Prüfziffer an eine fiktive Ziffernfolge anhängen. */
+const testGtin = (body: string) => {
+  const sum = body.split("").map(Number).reverse().reduce((acc, d, i) => acc + d * (i % 2 === 0 ? 3 : 1), 0);
+  return `${body}${(10 - (sum % 10)) % 10}`;
+};
+/**
+ * Paket I: Echte Preislistenzeilen erreichen Demo-Produkte nie (auch nicht über Demo-GTINs). Die Prüfungen des echten
+ * Wegs laufen daher gegen eine echte Abfrage mit fiktiver, global eindeutiger GTIN (NUR TEST) und `allowReal: true`.
+ */
+const DEMO_STAND = DEMO_QUERIES["p-stand"];
+const STAND = { ...DEMO_STAND, productId: "test-stand", gtin: testGtin("401234599990") };
+const LED = { ...DEMO_QUERIES["p-led"], productId: "test-led", gtin: testGtin("401234599991") };
 const STAND_PRODUCT = DEMO_PRODUCTS.find((p) => p.id === "p-stand")!;
 const KEY = "grosshandel-beispiel::GB-STAND-1";
+/** Echter Weg: nur nicht-synthetische Angebote, Zuordnung über die globale GTIN */
+const quotesFor = (store: OfferStore, query: typeof STAND, evidence: EvidenceEntry[] = []) => priceListQuotesFor(store, query, evidence, { allowReal: true });
 
 function offer(data: Partial<ImportedOfferData> = {}, synthetic = false): StoredOffer {
   return {
@@ -62,7 +75,8 @@ const FULL_EVIDENCE: EvidenceEntry[] = [
   proof("identity.match", "exact"),
   proof("safety.euResponsiblePerson", "Beispiel GmbH, Berlin"),
   proof("safety.safetyInformationDe", true),
-  proof("safety.document", DEMO_REQUIRED_DOCUMENTS.gpsr),
+  // Unterlagen erfüllen eine Pflicht nur mit festem Dokumenttyp (documents.ts)
+  { ...proof("safety.document", DEMO_REQUIRED_DOCUMENTS.gpsr), docType: "gpsr" },
   proof("dropshipping.supported", true),
   proof("pricing.unitPrice", 9.5),
   proof("pricing.shippingCost", 3.5),
@@ -73,9 +87,9 @@ const FULL_EVIDENCE: EvidenceEntry[] = [
   proof("payment.terms", { kind: "prepayment" }),
 ];
 
+/** Echte Abfrage: Demo-Angebote zählen für echte Kandidaten nie – der Vergleich enthält nur die Preislisten-Angebote. */
 function standView(store: OfferStore, evidence: EvidenceEntry[] = []) {
-  const quotes = [...demoQuotesFor("p-stand"), ...priceListQuotesFor(store, STAND, evidence)];
-  return buildSupplierView(STAND_PRODUCT, compareQuotes(STAND, quotes));
+  return buildSupplierView(STAND_PRODUCT, compareQuotes(STAND, quotesFor(store, STAND, evidence)));
 }
 const importedOf = (store: OfferStore, evidence: EvidenceEntry[] = []): OfferView => {
   const v = standView(store, evidence);
@@ -89,7 +103,7 @@ afterEach(() => {
 
 describe("Scout: importierte Preislisten-Angebote", () => {
   it("führt jede Preislisten-Angabe als „vom Lieferanten angegeben“ – nie als geprüft", () => {
-    const [quote] = priceListQuotesFor(storeWith(offer()), STAND);
+    const [quote] = quotesFor(storeWith(offer()), STAND);
     expect(factLevel(quote.pricing.unitPrice)).toBe("supplier_stated");
     expect(factLevel(quote.fulfillment.stock)).toBe("supplier_stated");
     expect(factLevel(quote.payment.terms)).toBe("supplier_stated");
@@ -115,21 +129,27 @@ describe("Scout: importierte Preislisten-Angebote", () => {
   });
 
   it("verlangt CE-Nachweise produktspezifisch – auch bei bestätigter CE-Angabe für ein anderes Produkt", () => {
-    const led = DEMO_QUERIES["p-led"];
+    const led = LED;
     const ledOffer = offer({ gtin: led.gtin });
     const otherProduct = [proof("safety.ceMarking", true, STAND.gtin!)];
-    const [quote] = priceListQuotesFor(storeWith(ledOffer), led, otherProduct);
+    const [quote] = quotesFor(storeWith(ledOffer), led, otherProduct);
     expect(quote.safety.ceMarking.status).toBe("missing");
     const v = buildSupplierView(DEMO_PRODUCTS.find((p) => p.id === "p-led")!, compareQuotes(led, [quote]));
     expect(v.excluded[0].exclusions.join(" ")).toMatch(/CE-Kennzeichnung fehlt/);
 
-    const [proven] = priceListQuotesFor(storeWith(ledOffer), led, [proof("safety.ceMarking", true, led.gtin!)]);
+    const [proven] = quotesFor(storeWith(ledOffer), led, [proof("safety.ceMarking", true, led.gtin!)]);
     expect(proven.safety.ceMarking).toMatchObject({ status: "confirmed", value: true, checkedAt: "2026-10-31" });
   });
 
   it("kennzeichnet synthetische Testdaten als DEMO, nie als echte Quelle", () => {
-    const o = importedOf(storeWith(offer({}, true)), FULL_EVIDENCE);
+    // Demo-Weg (Standard ohne allowReal): synthetische Zeile mit Demo-GTIN zur Demo-Abfrage
+    const evidence = FULL_EVIDENCE.map((e) => ({ ...e, productGtin: DEMO_STAND.gtin }));
+    const quotes = priceListQuotesFor(storeWith(offer({ gtin: DEMO_STAND.gtin }, true)), DEMO_STAND, evidence);
+    const v = buildSupplierView(STAND_PRODUCT, compareQuotes(DEMO_STAND, [...demoQuotesFor("p-stand"), ...quotes]));
+    const o = [...v.eligible, ...v.excluded].find((x) => x.quoteId.startsWith("price-list:"))!;
     expect(o.source).toBe("demo");
+    // Echter Weg: synthetische Zeilen erscheinen dort nie
+    expect(quotesFor(storeWith(offer({}, true)), STAND, FULL_EVIDENCE)).toEqual([]);
     expect(o.flags.find((f) => f.kind === "demo")?.label).toBe("Testdaten");
   });
 
@@ -215,9 +235,13 @@ describe("Scout: Befunde aus dem Review", () => {
   it("macht ein vollständig geprüftes, günstigeres echtes Angebot zur Kalkulationsbasis – aber ohne Freigabe", () => {
     testSupplierData.store = storeWith(offer());
     testSupplierData.evidence = FULL_EVIDENCE;
-    const stand = getProductAnalyses().find((a) => a.product.id === "p-stand")!;
-    expect(stand.best?.landedCost).toBe(13);
+    // Für den echten Kandidaten ist das geprüfte Angebot die Basis …
+    const real = compareQuotes(STAND, quotesFor(testSupplierData.store, STAND, FULL_EVIDENCE));
+    expect(real.recommendations.cheapest).toMatchObject({ perUnit: 13, demo: false, approval: "none" });
     expect(standView(testSupplierData.store, FULL_EVIDENCE).purchaseApproved).toBe(false);
+    // … das Demo-Produkt bleibt unberührt (Paket I: echte Zeilen erreichen Demo-Produkte nie)
+    const stand = getProductAnalyses().find((a) => a.product.id === "p-stand")!;
+    expect(stand.best?.landedCost).toBe(15.1);
   });
 });
 
@@ -239,19 +263,19 @@ describe("Scout: Befunde aus dem abschließenden Review", () => {
   });
 
   it("wendet sich widersprechende Nachweise zum selben Feld nicht an – egal in welcher Reihenfolge", () => {
-    const led = DEMO_QUERIES["p-led"];
+    const led = LED;
     const ledOffer = offer({ gtin: led.gtin });
     const ce = (value: boolean, checkedAt: string) => ({ ...proof("safety.ceMarking", value, led.gtin!), checkedAt });
     for (const entries of [
       [ce(false, "2026-10-30"), ce(true, "2025-01-01")],
       [ce(true, "2025-01-01"), ce(false, "2026-10-30")],
     ]) {
-      const [q] = priceListQuotesFor(storeWith(ledOffer), led, entries);
+      const [q] = quotesFor(storeWith(ledOffer), led, entries);
       expect(q.safety.ceMarking.status).toBe("missing");
       expect(q.provenance?.evidenceConflicts?.join(" ")).toMatch(/CE-Kennzeichnung widersprechen sich/);
     }
     const stock = (value: number) => proof("fulfillment.stock", value);
-    const [q] = priceListQuotesFor(storeWith(offer({ stock: undefined })), STAND, [stock(0), stock(400)]);
+    const [q] = quotesFor(storeWith(offer({ stock: undefined })), STAND, [stock(0), stock(400)]);
     expect(q.fulfillment.stock.status).toBe("missing");
   });
 
@@ -307,7 +331,7 @@ describe("Scout: Befunde aus dem abschließenden Review", () => {
 
 describe("Scout: Finanzierung importierter Angebote", () => {
   const base = (evidence: EvidenceEntry[], data: Partial<ImportedOfferData> = {}) => {
-    const [quote] = priceListQuotesFor(storeWith(offer(data)), STAND, evidence);
+    const [quote] = quotesFor(storeWith(offer(data)), STAND, evidence);
     const cost = { unitPrice: 9.5, shippingCost: 3.5, importCost: 0, perUnit: 13, total: 13 };
     return { quote, financing: assessFinancing(quote), cost };
   };
@@ -350,11 +374,27 @@ describe("Scout: Demo-Daten und Kalkulationsbasis bleiben unverändert", () => {
     testSupplierData.store = storeWith(offer({ unitPrice: 1 }));
     for (const a of getProductAnalyses()) expect(a.best?.landedCost, a.product.id).toBe(SHOPIFY_COSTS[a.product.id]);
     const stand = getProductAnalyses().find((a) => a.product.id === "p-stand")!;
-    expect(stand.scout.excluded.some((e) => e.quote.adapterId === "price-list")).toBe(true);
+    expect([...stand.scout.eligible, ...stand.scout.excluded].some((e) => e.quote.adapterId === "price-list")).toBe(false);
+  });
+
+  it("ordnet eine echte Preislistenzeile mit Demo-GTIN keinem Demo-Produkt zu (Paket I) – auch nicht vollständig belegt", async () => {
+    const demoGtinEvidence = FULL_EVIDENCE.map((e) => ({ ...e, productGtin: DEMO_STAND.gtin }));
+    testSupplierData.store = storeWith(offer({ gtin: DEMO_STAND.gtin, unitPrice: 1 }));
+    testSupplierData.evidence = demoGtinEvidence;
+    for (const a of getProductAnalyses()) {
+      expect(a.best?.landedCost, a.product.id).toBe(SHOPIFY_COSTS[a.product.id]);
+      expect([...a.scout.eligible, ...a.scout.excluded].some((e) => e.quote.adapterId === "price-list"), a.product.id).toBe(false);
+    }
+    for (const { report } of await getSupplierScoutReports()) {
+      expect(report.adapters.find((a) => a.adapterId === "price-list")?.quoteCount ?? 0).toBe(0);
+    }
+    expect(priceListQuotesFor(testSupplierData.store, DEMO_STAND, demoGtinEvidence)).toEqual([]);
+    expect(await createPriceListAdapter(testSupplierData.store, demoGtinEvidence).findQuotes(DEMO_STAND)).toEqual([]);
   });
 
   it("liefert Demo- und Preislisten-Angebote über dieselbe Adapter-Schnittstelle", async () => {
-    testSupplierData.store = storeWith(offer());
+    // Demo-Weg: nur synthetische Testdaten erreichen Demo-Produkte
+    testSupplierData.store = storeWith(offer({ gtin: DEMO_STAND.gtin }, true));
     const reports = await getSupplierScoutReports();
     const stand = reports.find((r) => r.product.id === "p-stand")!.report;
     expect(stand.adapters.find((a) => a.adapterId === "price-list")).toMatchObject({ status: "ok", quoteCount: 1 });
@@ -363,7 +403,75 @@ describe("Scout: Demo-Daten und Kalkulationsbasis bleiben unverändert", () => {
   });
 
   it("zeigt den Importstand ohne Preise und zählt nicht zugeordnete Angebote", () => {
+    // Echte Zeile ohne Katalog und synthetische Zeile ohne Demo-GTIN: beide ohne Zuordnung
     testSupplierData.store = storeWith(offer(), { ...offer({ gtin: "2000000000992" }, true), key: "x::1" });
-    expect(getSupplierImportStatus()).toEqual({ offers: 2, synthetic: 1, unassigned: 1, lastImport: null, evidenceEntries: 0, errors: [] });
+    expect(getSupplierImportStatus()).toEqual({ offers: 2, synthetic: 1, unassigned: 2, lastImport: null, evidenceEntries: 0, errors: [] });
+    // Synthetische Zeile mit Demo-GTIN gilt als zugeordnet; eine echte Zeile mit Demo-GTIN nie
+    testSupplierData.store = storeWith({ ...offer({ gtin: DEMO_STAND.gtin }, true), key: "x::2" }, { ...offer({ gtin: DEMO_STAND.gtin }), key: "x::3" });
+    expect(getSupplierImportStatus().unassigned).toBe(1);
+  });
+});
+
+describe("Scout: Nachweise für Katalogvarianten und neue Felder (Paket B)", () => {
+  /** NUR TEST: gültige GS1-Prüfziffer an eine fiktive Ziffernfolge anhängen. */
+  const gtin = (body: string) => {
+    const sum = body.split("").map(Number).reverse().reduce((acc, d, i) => acc + d * (i % 2 === 0 ? 3 : 1), 0);
+    return `${body}${(10 - (sum % 10)) % 10}`;
+  };
+  const G = gtin("401234500001"); // NUR TEST
+  const catalogQuery = (o: Partial<typeof STAND> = {}) => ({ ...STAND, productId: "catalog:kk", title: "Kabelkanal", ...o });
+
+  it("wendet productKey-Nachweise nur auf das Ziel ohne GTIN an", () => {
+    const noGtin = catalogQuery({ gtin: undefined, productKey: "cat:kk:KK-1" });
+    const byKey: EvidenceEntry = { ...proof("identity.match", "exact"), productGtin: undefined, productKey: "cat:kk:KK-1" };
+    const s = storeWith(offer({ gtin: undefined, mpn: "KK-1" }));
+    const [q] = priceListQuotesFor(s, noGtin, [byKey], { allowReal: true, target: { shopSku: "KK-1", supplierOffers: [KEY], mpn: "KK-1" } });
+    expect(q.identity.match).toMatchObject({ status: "confirmed", value: "exact" });
+    // Anderer Varianten-Schlüssel oder Ziel mit GTIN: nicht angewendet
+    const [other] = priceListQuotesFor(s, { ...noGtin, productKey: "cat:kk:KK-2" }, [byKey], { allowReal: true, target: { shopSku: "KK-2", supplierOffers: [KEY], mpn: "KK-1" } });
+    expect(other.identity.match.status).not.toBe("confirmed");
+    const withGtin = storeWith(offer({ gtin: G }));
+    const [g] = priceListQuotesFor(withGtin, catalogQuery({ gtin: G, productKey: "cat:kk:KK-1" }), [byKey], { allowReal: true });
+    expect(g.identity.match.status).not.toBe("confirmed");
+  });
+
+  it("wendet einen GTIN-Nachweis in anderer Schreibweise derselben Nummer an", () => {
+    const s = storeWith(offer({ gtin: G }));
+    const [q] = priceListQuotesFor(s, catalogQuery({ gtin: G }), [proof("identity.match", "exact", `0${G}`)], { allowReal: true });
+    expect(q.identity.match.status).toBe("confirmed");
+  });
+
+  it("macht den Identitätsnachweis ungültig, wenn sich die Variantenkennung ändert", () => {
+    const old = offer({ variantLabel: "Schwarz" });
+    const changed: StoredOffer = {
+      ...offer({ variantLabel: "Weiß" }),
+      history: [{ data: old.data, provenance: old.provenance, replacedAt: "2026-10-20T10:00:00.000Z", replacedByImportId: "imp-2" }],
+    };
+    const evidence = [{ ...proof("identity.match", "exact"), checkedAt: "2026-10-10" }];
+    expect(quotesFor(storeWith(old), STAND, evidence)[0].identity.match.status).toBe("confirmed");
+    const [q] = quotesFor(storeWith(changed), STAND, evidence);
+    expect(q.identity.match.status).not.toBe("confirmed");
+    expect(q.provenance?.evidenceConflicts?.join(" ")).toMatch(/Artikeländerung/);
+  });
+
+  it("bestätigt Marke, Mindestbestellmenge, Kreditrahmen und Retourenabwicklung nur per Nachweis", () => {
+    const s = storeWith(offer({ brand: "Kabelwerk", minOrderQuantity: 1 }));
+    const [stated] = quotesFor(s, STAND);
+    expect(stated.payment.creditLimit.status).toBe("missing");
+    expect(stated.dropshipping.returnsHandledBy.status).toBe("missing");
+    expect(factLevel(stated.identity.brand)).toBe("supplier_stated");
+    const [q] = quotesFor(s, STAND, [
+      proof("identity.brand", "Kabelwerk"),
+      proof("pricing.minOrderQuantity", 1),
+      proof("payment.creditLimit", 250),
+      proof("dropshipping.returnsHandledBy", "supplier"),
+    ]);
+    expect(q.identity.brand).toMatchObject({ status: "confirmed", value: "Kabelwerk" });
+    expect(q.pricing.minOrderQuantity).toMatchObject({ status: "confirmed", value: 1 });
+    expect(q.payment.creditLimit).toMatchObject({ status: "confirmed", value: 250 });
+    expect(q.dropshipping.returnsHandledBy).toMatchObject({ status: "confirmed", value: "supplier" });
+    // Widerspricht der Nachweis der Preisliste (andere Marke), gilt er nicht
+    const [conflict] = quotesFor(s, STAND, [proof("identity.brand", "Andere Marke")]);
+    expect(conflict.identity.brand.status).toBe("unconfirmed");
   });
 });
