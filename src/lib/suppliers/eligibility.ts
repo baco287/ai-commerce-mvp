@@ -43,6 +43,9 @@ export interface CostBreakdown {
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
+/** Eine Textangabe zählt nur, wenn sie nicht leer ist (z. B. Name der verantwortlichen Person). */
+export const hasText = (v: string) => v.trim() !== "";
+
 const statusText = (f: Fact<unknown>) => (f.status === "missing" ? "fehlt" : f.status === "unconfirmed" ? "nur unbestätigt" : "bestätigt");
 
 export const shipsFromEu = (q: SupplierQuote) => {
@@ -88,8 +91,9 @@ export function checkEligibility(q: SupplierQuote, query: ProductQuery, rules: S
     const ce = factValue(q.safety.ceMarking) === false ? "nicht vorhanden" : statusText(q.safety.ceMarking);
     exclude("safety_unclear", `CE-Kennzeichnung ${ce}.`);
   }
-  if (!isConfirmed(q.safety.euResponsiblePerson)) {
-    exclude("safety_unclear", `Verantwortliche Person in der EU (GPSR) ${statusText(q.safety.euResponsiblePerson)}.`);
+  if (!isConfirmed(q.safety.euResponsiblePerson, hasText)) {
+    const rp = factValue(q.safety.euResponsiblePerson)?.trim() === "" ? "leer" : statusText(q.safety.euResponsiblePerson);
+    exclude("safety_unclear", `Verantwortliche Person in der EU (GPSR) ${rp}.`);
   }
   if (!isConfirmed(q.safety.safetyInformationDe, Boolean)) {
     const info = factValue(q.safety.safetyInformationDe) === false ? "nicht vorhanden" : statusText(q.safety.safetyInformationDe);

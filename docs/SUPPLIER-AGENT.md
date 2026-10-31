@@ -279,13 +279,23 @@ Erledigt:
   stehen darüber. Kein Bestellknopf; Hinweis „Eine Empfehlung ist keine Einkaufsfreigabe". Auf dem Handy liegen
   die Karten untereinander, ab breiten Bildschirmen (xl) nebeneinander. Die bisherige Vergleichstabelle bleibt
   vorerst darunter.
+- **Nachweise und Finanzierung:** Jede Karte zeigt die Nachweise des Angebots (Produktidentität, CE, verantwortliche
+  Person EU, Sicherheitshinweise DE, Unterlagen, geprüftes Muster, Direktversand, neutraler Versand) mit Status
+  „bestätigt", „nur behauptet", „fehlt", „nicht vorhanden" oder „nicht nötig". Die Logik steckt als reine,
+  getestete Funktion in `src/lib/suppliers/evidence.ts` und folgt denselben Regeln wie die Eignungsprüfung. Bei
+  einem Zahlungsziel in Tagen erklärt eine Zeile unter dem Abzeichen die Finanzierung.
+- **Ausgeschlossene Angebote:** aufklappbare Liste je Produkt mit Lieferant, Versandland, Kosten (falls bekannt),
+  Kurzgründen als Abzeichen und den vollständigen Ausschlussgründen. Darunter der Status der Datenquellen
+  (abgefragt / gesperrt / Fehler, mit Anzahl der Angebote).
+- **Mindestanforderungen:** Die Karte nennt zusätzlich die harten Scout-Kriterien (Identität, Produktsicherheit,
+  Direktversand, kein Vorratskauf, Kosten vollständig, keine Sicherheitsprobleme) und erklärt, dass Vorkasse und
+  unklare Zahlungsziele nicht ausschließen, sondern als Vorfinanzierung markiert werden.
+- Eine leere verantwortliche Person in der EU (`confirmed("")`) gilt nicht mehr als Nachweis und schließt das
+  Angebot aus.
 
 Offen, jeweils nach Absprache:
 
-1. **Ausgeschlossene Angebote und Nachweise:** aufklappbare Liste der ausgeschlossenen Angebote mit Gründen,
-   Status der Datenquellen, Karte „Mindestanforderungen" um die Scout-Kriterien (Identität, CE/GPSR,
-   Dropshipping, kein Vorratskauf, Finanzierung) erweitern.
-2. **Freigabe-Fluss:** Die Empfehlung „insgesamt bester" als `ApprovalRequest` vom Typ `supplier_change` in die
+1. **Freigabe-Fluss:** Die Empfehlung „insgesamt bester" als `ApprovalRequest` vom Typ `supplier_change` in die
    Freigabeliste übernehmen. Eine Freigabe setzt nur den „freigegebenen Lieferanten" je Produkt – Einkäufe bleiben
    über `SAFETY_SWITCHES.autoPurchaseEnabled` gesperrt.
 

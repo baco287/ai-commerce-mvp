@@ -5,8 +5,16 @@ import { useState } from "react";
 import { Badge, DemoBadge } from "@/components/ui/badge";
 import type { SupplierScoutItem } from "@/lib/data";
 import { formatDays, formatEur, formatPercent } from "@/lib/format";
-import { FINANCING_STATUS_LABEL, SCOUT_RECOMMENDATION_LABEL } from "@/lib/labels";
-import type { Recommendation, RecommendationKind } from "@/lib/suppliers";
+import {
+  ADAPTER_STATUS_LABEL,
+  EVIDENCE_STATUS_LABEL,
+  EXCLUSION_LABEL,
+  FINANCING_STATUS_LABEL,
+  SCOUT_RECOMMENDATION_LABEL,
+} from "@/lib/labels";
+import type { AdapterRun, ProductQuery, QuoteEvaluation, Recommendation, RecommendationKind } from "@/lib/suppliers";
+import { evidenceFor } from "@/lib/suppliers/evidence";
+import { factValue } from "@/lib/suppliers/model";
 
 const KINDS: { kind: RecommendationKind; icon: LucideIcon; hint: string }[] = [
   { kind: "cheapest", icon: Wallet, hint: "Niedrigste Gesamtkosten je Stück" },
@@ -70,17 +78,25 @@ export function ScoutRecommendations({ items }: { items: SupplierScoutItem[] }) 
           ))}
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-            {KINDS.map(({ kind, icon, hint }) => (
-              <RecommendationCard
-                key={kind}
-                kind={kind}
-                icon={icon}
-                hint={hint}
-                rec={report.recommendations[kind]}
-                margin={report.recommendations[kind] ? item.margins[report.recommendations[kind]!.quoteId] : undefined}
-              />
-            ))}
+            {KINDS.map(({ kind, icon, hint }) => {
+              const rec = report.recommendations[kind];
+              return (
+                <RecommendationCard
+                  key={kind}
+                  kind={kind}
+                  icon={icon}
+                  hint={hint}
+                  rec={rec}
+                  query={report.query}
+                  evaluation={rec ? report.eligible.find((e) => e.quote.id === rec.quoteId) : undefined}
+                  margin={rec ? item.margins[rec.quoteId] : undefined}
+                />
+              );
+            })}
           </div>
+
+          <ExcludedOffers excluded={report.excluded} />
+          <DataSources adapters={report.adapters} />
 
           <p className="flex items-start gap-2 text-xs text-muted">
             <Lock className="mt-0.5 size-3.5 shrink-0 text-subtle" aria-hidden />
@@ -98,12 +114,16 @@ function RecommendationCard({
   icon: Icon,
   hint,
   rec,
+  query,
+  evaluation,
   margin,
 }: {
   kind: RecommendationKind;
   icon: LucideIcon;
   hint: string;
   rec: Recommendation | null;
+  query: ProductQuery;
+  evaluation?: QuoteEvaluation;
   margin?: { contribution: number; marginPercent: number };
 }) {
   const title = SCOUT_RECOMMENDATION_LABEL[kind];
@@ -139,6 +159,10 @@ function RecommendationCard({
           {rec.demo && <DemoBadge />}
           <Badge tone={financing.tone}>{financing.label}</Badge>
         </div>
+        {/* Detail nur bei einem Zahlungsziel in Tagen – bei Vorkasse/unbekannt sagt das Abzeichen schon alles */}
+        {evaluation && (evaluation.financing.termDays ?? 0) > 0 && (
+          <p className="mt-1.5 text-[11px] leading-snug text-muted">{evaluation.financing.label}.</p>
+        )}
       </div>
 
       <dl className="grid grid-cols-3 gap-2 text-xs">
@@ -163,6 +187,23 @@ function RecommendationCard({
           </div>
         )}
       </dl>
+
+      {evaluation && (
+        <div>
+          <p className="text-[11px] font-medium text-subtle">Nachweise</p>
+          <ul className="mt-1 grid grid-cols-1 gap-x-3 gap-y-1 text-[11px] sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+            {evidenceFor(evaluation.quote, query).map((e) => {
+              const s = EVIDENCE_STATUS_LABEL[e.status];
+              return (
+                <li key={e.key} className="flex min-w-0 items-center justify-between gap-2">
+                  <span className="truncate text-muted">{e.label}</span>
+                  <Badge tone={s.tone}>{s.label}</Badge>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
       {rec.openPoints.length > 0 ? (
         <div className="rounded-lg border border-amber-400/20 bg-amber-400/[0.05] p-2.5">
@@ -191,5 +232,66 @@ function RecommendationCard({
         </ul>
       </details>
     </article>
+  );
+}
+
+/** Ausgeschlossene Angebote mit Gründen – sie werden nie empfohlen. */
+function ExcludedOffers({ excluded }: { excluded: QuoteEvaluation[] }) {
+  if (excluded.length === 0) return null;
+  return (
+    <details className="rounded-xl border border-line bg-surface-2/30">
+      <summary className="cursor-pointer select-none px-4 py-3 text-sm text-fg hover:text-cyan-300">
+        {excluded.length === 1 ? "1 ausgeschlossenes Angebot" : `${excluded.length} ausgeschlossene Angebote`}
+        <span className="text-muted"> – Gründe anzeigen</span>
+      </summary>
+      <ul className="divide-y divide-line border-t border-line">
+        {excluded.map((e) => {
+          const codes = [...new Set(e.eligibility.exclusions.map((x) => x.code))];
+          const from = factValue(e.quote.fulfillment.shipsFrom);
+          return (
+            <li key={e.quote.id} className="px-4 py-3">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="font-medium text-fg">{e.quote.supplierName}</span>
+                {from && <span className="text-xs text-subtle">Versand aus {from}</span>}
+                {e.cost && <span className="text-xs tabular-nums text-subtle">· {formatEur(e.cost.perUnit)} je Stück</span>}
+              </div>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {codes.map((c) => (
+                  <Badge key={c} tone="red">
+                    {EXCLUSION_LABEL[c]}
+                  </Badge>
+                ))}
+              </div>
+              <ul className="mt-1.5 space-y-0.5 text-xs leading-snug text-muted">
+                {e.eligibility.exclusions.map((x) => (
+                  <li key={x.message}>• {x.message}</li>
+                ))}
+              </ul>
+            </li>
+          );
+        })}
+      </ul>
+    </details>
+  );
+}
+
+/** Welche Datenquellen abgefragt, gesperrt oder fehlerhaft waren. */
+function DataSources({ adapters }: { adapters: AdapterRun[] }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted">
+      <span className="text-subtle">Datenquellen:</span>
+      {adapters.map((a) => {
+        const s = ADAPTER_STATUS_LABEL[a.status];
+        return (
+          <span key={a.adapterId} className="inline-flex items-center gap-1.5" title={a.message}>
+            {a.adapterName}
+            <Badge tone={s.tone}>
+              {s.label}
+              {a.status === "ok" ? ` · ${a.quoteCount}` : ""}
+            </Badge>
+          </span>
+        );
+      })}
+    </div>
   );
 }

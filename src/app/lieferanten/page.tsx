@@ -12,6 +12,16 @@ import { formatRating } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Lieferantenvergleich" };
 
+/** Zusätzliche harte Kriterien des Supplier Scouts (siehe src/lib/suppliers/eligibility.ts). */
+const SCOUT_CRITERIA = [
+  { title: "Produktidentität", rule: "GTIN oder exakter Abgleich bestätigt" },
+  { title: "Produktsicherheit", rule: "CE (falls nötig), EU-Verantwortliche, Hinweise DE bestätigt" },
+  { title: "Direktversand", rule: "Versand an Endkunden bestätigt" },
+  { title: "Kein Vorratskauf", rule: "Mindestabnahme höchstens Bestellmenge" },
+  { title: "Kosten", rule: "Einkauf, Versand und Import vollständig" },
+  { title: "Keine Sicherheitsprobleme", rule: "Kein Rückruf, keine Behördenwarnung" },
+];
+
 export default async function SuppliersPage() {
   const scout = await getSupplierScoutReports();
   const items: SupplierComparisonItem[] = getProductAnalyses().map((a) => ({
@@ -49,6 +59,19 @@ export default async function SuppliersPage() {
               <p className="mt-0.5 font-medium">min. {SUPPLIER_RULES.minStock} Stück</p>
             </li>
           </ul>
+          <p className="mb-2 mt-4 text-xs font-medium text-muted">Zusätzlich im Supplier Scout</p>
+          <ul className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-3">
+            {SCOUT_CRITERIA.map((c) => (
+              <li key={c.title} className="rounded-lg border border-line bg-surface-2/50 p-3">
+                <p className="text-xs text-subtle">{c.title}</p>
+                <p className="mt-0.5 font-medium">{c.rule}</p>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-xs text-muted">
+            Fehlende oder nur behauptete Angaben schließen bei diesen Punkten aus. Vorkasse und unklare Zahlungsziele schließen nicht
+            aus, werden aber als Vorfinanzierung markiert.
+          </p>
         </Card>
         <Card>
           <div className="flex items-start gap-3">
