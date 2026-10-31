@@ -12,6 +12,7 @@ import { DEMO_ACTIVITIES, DEMO_ALERTS, DEMO_APPROVALS } from "@/lib/demo/events"
 import { DEMO_DAYS, DEMO_ORDERS, DEMO_TODAY } from "@/lib/demo/orders";
 import { DEMO_PRODUCTS } from "@/lib/demo/products";
 import { DEMO_OFFERS } from "@/lib/demo/suppliers";
+import { DEMO_ADAPTERS, DEMO_QUERIES, scoutSuppliers, type ProductQuery, type ScoutReport } from "@/lib/suppliers";
 import type { DemoOrder, Product } from "@/lib/types";
 
 export type Recommendation = "kandidat" | "beobachten" | "verwerfen";
@@ -54,6 +55,32 @@ export function getProductAnalyses(): ProductAnalysis[] {
       recommendation: recommend(demand, margin),
     };
   });
+}
+
+export interface SupplierScoutItem {
+  product: Product;
+  /** null, wenn für das Produkt (noch) keine Lieferantensuche definiert ist */
+  report: ScoutReport | null;
+  /** Deckungsbeitrag je geeignetem Angebot (Schlüssel: Angebots-ID), gerechnet mit dem Zielpreis */
+  margins: Record<string, MarginBreakdown>;
+}
+
+/**
+ * Supplier-Scout-Berichte für alle Produkte – reine Analyse. Empfehlungen geben nichts frei:
+ * Hier wird weder die Einkaufssperre aufgerufen noch ein Zahlungsziel an sie übergeben.
+ */
+export async function getSupplierScoutReports(): Promise<SupplierScoutItem[]> {
+  return Promise.all(
+    DEMO_PRODUCTS.map(async (product): Promise<SupplierScoutItem> => {
+      const query = DEMO_QUERIES[product.id] as ProductQuery | undefined;
+      if (!query) return { product, report: null, margins: {} };
+      const report = await scoutSuppliers(query, DEMO_ADAPTERS);
+      const margins = Object.fromEntries(
+        report.eligible.flatMap((e) => (e.cost ? [[e.quote.id, calculateMargin(product.targetPriceGross, e.cost.perUnit)]] : [])),
+      );
+      return { product, report, margins };
+    }),
+  );
 }
 
 export interface OrderRow {

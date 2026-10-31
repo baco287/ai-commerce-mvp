@@ -260,17 +260,25 @@ enthalten. Ein Treffer über Suchbegriffe ersetzt nie die Identitätsprüfung.
 Die bestehende Seite `/lieferanten` nutzt `evaluateOffers` aus `src/lib/calc/suppliers.ts` mit dem älteren,
 flachen Typ `SupplierOffer`.
 
-Erledigt: strukturierte Empfehlungsfelder (`approval`, `demo`, `requiresPrefinancing`, `openPoints` …) und
-einheitliche Demo-Daten für alle fünf Produkte. Offen, jeweils nach Absprache:
+Erledigt:
 
-1. **Daten bereitstellen:** In `src/lib/data.ts` eine Funktion `getSupplierScoutReports()` ergänzen, die für jedes
-   Demo-Produkt `scoutSuppliers(DEMO_QUERIES[id], DEMO_ADAPTERS)` aufruft. Da `scoutSuppliers` asynchron ist,
-   wird die Seite zur `async` Server Component.
-2. **Anzeige:** Eine neue Komponente `src/components/suppliers/scout-recommendations.tsx` zeigt je Produkt drei Karten
+- Strukturierte Empfehlungsfelder (`approval`, `demo`, `requiresPrefinancing`, `openPoints` …).
+- Einheitliche Demo-Daten für alle fünf Produkte.
+- **Datenzugriff:** `getSupplierScoutReports()` in `src/lib/data.ts` liefert je Demo-Produkt
+  `{ product, report, margins }`. `report` ist der `ScoutReport` (oder `null`, wenn für ein Produkt keine
+  Lieferantensuche definiert ist), `margins` der Deckungsbeitrag je **geeignetem** Angebot, gerechnet mit dem
+  Zielpreis. Die Funktion ist asynchron, ruft die Einkaufssperre nie auf und übergibt ihr nichts. Ein Test stellt
+  sicher, dass Seiten und Komponenten weder `evaluateAutoPurchase` noch `toPurchaseGuardTerms` importieren und
+  dass der günstigste geeignete Lieferant mit der bisherigen Produktanalyse übereinstimmt.
+
+Offen, jeweils nach Absprache:
+
+1. **Anzeige:** Die Seite `/lieferanten` wird zur `async` Server Component und ruft `getSupplierScoutReports()` auf.
+   Eine neue Komponente `src/components/suppliers/scout-recommendations.tsx` zeigt je Produkt drei Karten
    (Günstigster / Schnellster / Insgesamt bester) mit den `reasons`, ein Abzeichen „Vorfinanzierung nötig" bzw.
    „Zahlungsziel bestätigt" und eine aufklappbare Liste der ausgeschlossenen Angebote mit Gründen. Bestehendes
    `DemoBadge` für `report.containsDemoData`.
-3. **Freigabe-Fluss:** Die Empfehlung „insgesamt bester" als `ApprovalRequest` vom Typ `supplier_change` in die
+2. **Freigabe-Fluss:** Die Empfehlung „insgesamt bester" als `ApprovalRequest` vom Typ `supplier_change` in die
    Freigabeliste übernehmen. Eine Freigabe setzt nur den „freigegebenen Lieferanten" je Produkt – Einkäufe bleiben
    über `SAFETY_SWITCHES.autoPurchaseEnabled` gesperrt.
 
