@@ -1,0 +1,145 @@
+// Einheitliches Datenmodell des Supplier Scout Agents.
+// Jeder Lieferanten-Adapter (Demo, später Feed oder API) liefert genau diese Struktur.
+// Schnittstellenbeschreibung für echte Lieferanten: docs/SUPPLIER-AGENT.md
+//
+// Grundsatz: Jede geschäftsrelevante Angabe ist ein `Fact` und sagt ausdrücklich,
+// ob sie bestätigt, nur behauptet (unbestätigt) oder gar nicht vorhanden ist.
+// Fehlende Angaben werden nie stillschweigend durch Annahmen ersetzt.
+
+/** Status einer Angabe: bestätigt (geprüfte Quelle), unbestätigt (Selbstauskunft, Schätzung) oder fehlend. */
+export type FactStatus = "confirmed" | "unconfirmed" | "missing";
+
+export type Fact<T> =
+  | { status: "confirmed"; value: T; source: string; checkedAt: string }
+  | { status: "unconfirmed"; value: T; source: string }
+  | { status: "missing" };
+
+export const confirmed = <T>(value: T, source: string, checkedAt: string): Fact<T> => ({ status: "confirmed", value, source, checkedAt });
+export const unconfirmed = <T>(value: T, source: string): Fact<T> => ({ status: "unconfirmed", value, source });
+export const missing = <T>(): Fact<T> => ({ status: "missing" });
+
+/** Wert einer Angabe, falls vorhanden (bestätigt oder unbestätigt). */
+export const factValue = <T>(f: Fact<T>): T | undefined => (f.status === "missing" ? undefined : f.value);
+export const isConfirmed = <T>(f: Fact<T>, predicate: (v: T) => boolean = () => true): boolean =>
+  f.status === "confirmed" && predicate(f.value);
+
+/** ISO-3166-Ländercode, z. B. "DE", "PL", "CN". */
+export type CountryCode = string;
+
+export const EU_COUNTRIES: readonly CountryCode[] = [
+  "AT", "BE", "BG", "CY", "CZ", "DE", "DK", "EE", "ES", "FI", "FR", "GR", "HR", "HU", "IE", "IT", "LT", "LU", "LV",
+  "MT", "NL", "PL", "PT", "RO", "SE", "SI", "SK",
+];
+
+/** Was der Scout für ein Produkt sucht. Bestellmenge ist immer eine Kundenbestellung – kein Vorratskauf. */
+export interface ProductQuery {
+  /** Produkt-ID der Kontrollzentrale (z. B. "p-led") */
+  productId: string;
+  title: string;
+  /** EAN/GTIN – sicherste Zuordnung über Lieferanten hinweg */
+  gtin?: string;
+  /** Stück je Kundenbestellung (Standard 1) */
+  quantity: number;
+  destinationCountry: "DE";
+  /** Produktsicherheit: Welche Nachweise für dieses Produkt zwingend sind */
+  safety: { ceRequired: boolean };
+}
+
+export type IdentityMatch = "exact" | "variant" | "different";
+
+/** Produktidentität beim Lieferanten. Grundlage dafür, dass wirklich dasselbe Produkt verglichen wird. */
+export interface ProductIdentity {
+  supplierSku: string;
+  title: string;
+  gtin: Fact<string>;
+  mpn: Fact<string>;
+  brand: Fact<string>;
+  /** Abgleich mit dem gesuchten Produkt (z. B. per GTIN, Datenblatt oder Muster) */
+  match: Fact<IdentityMatch>;
+}
+
+/** Produktsicherheit nach EU-Recht (CE, GPSR). */
+export interface ProductSafety {
+  ceMarking: Fact<boolean>;
+  /** Hersteller bzw. verantwortliche Person in der EU (GPSR) */
+  euResponsiblePerson: Fact<string>;
+  /** Sicherheits- und Gebrauchshinweise auf Deutsch vorhanden */
+  safetyInformationDe: Fact<boolean>;
+  /** Bekannte Probleme, z. B. Rückruf, Behördenwarnung. Jeder Eintrag schließt das Angebot aus. */
+  openIssues: string[];
+}
+
+/** Alle Beträge netto in EUR je Stück. */
+export interface Pricing {
+  unitPrice: Fact<number>;
+  /** Versand bis zum Kunden nach DE je Stück */
+  shippingCost: Fact<number>;
+  /** Zoll-/Importnebenkosten; bei Versand aus der EU 0 */
+  importCost: Fact<number>;
+  /** Mindestabnahme je Bestellung. Größer als die Bestellmenge = Vorratskauf → ausgeschlossen. */
+  minOrderQuantity: Fact<number>;
+}
+
+export interface Fulfillment {
+  shipsFrom: Fact<CountryCode>;
+  /** Lieferung an Endkunden in DE möglich */
+  deliversToDestination: Fact<boolean>;
+  /** Lieferzeit in Werktagen bis zum Kunden */
+  deliveryDays: Fact<{ min: number; max: number }>;
+  /** Bestand im Lager des LIEFERANTEN (nicht unser Shopify-Bestand) */
+  stock: Fact<number>;
+  tracking: Fact<boolean>;
+}
+
+export type OrderChannel = "api" | "portal" | "email";
+
+export interface DropshippingSupport {
+  /** Versand direkt an unseren Kunden */
+  supported: Fact<boolean>;
+  /** Neutraler Versand ohne Werbung/Rechnung des Lieferanten im Paket */
+  blindShipping: Fact<boolean>;
+  orderChannel: Fact<OrderChannel>;
+  returnsHandledBy: Fact<"supplier" | "shop">;
+}
+
+/**
+ * Zahlungsbedingungen beim Lieferanten.
+ * prepayment = Zahlung vor Versand (Vorkasse), net_terms = Rechnung mit Zahlungsziel.
+ */
+export type PaymentTerms = { kind: "prepayment" } | { kind: "net_terms"; days: number };
+
+export interface PaymentConditions {
+  terms: Fact<PaymentTerms>;
+  /** Kreditrahmen beim Lieferanten in EUR, falls eingeräumt */
+  creditLimit: Fact<number>;
+}
+
+export interface Reliability {
+  /** Bewertung 1–5 */
+  rating: Fact<number>;
+  /** Anteil pünktlicher Lieferungen 0–1 */
+  onTimeRate: Fact<number>;
+  /** Anteil reklamierter/defekter Sendungen 0–1 */
+  defectRate: Fact<number>;
+}
+
+/** Ein normalisiertes Lieferantenangebot für genau ein Produkt. */
+export interface SupplierQuote {
+  /** Eindeutig je Adapter, z. B. "demo:brightline:p-led" */
+  id: string;
+  adapterId: string;
+  supplierId: string;
+  supplierName: string;
+  productId: string;
+  /** true = fiktive Demo-Daten. Darf nie in echte Einkaufsentscheidungen einfließen. */
+  demo: boolean;
+  identity: ProductIdentity;
+  safety: ProductSafety;
+  pricing: Pricing;
+  fulfillment: Fulfillment;
+  dropshipping: DropshippingSupport;
+  payment: PaymentConditions;
+  reliability: Reliability;
+  /** Zeitpunkt, zu dem der Adapter die Daten geliefert hat (ISO) */
+  retrievedAt: string;
+}

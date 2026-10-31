@@ -1,3 +1,10 @@
 # Die Shopify-Import-CSV wird aus den Dashboard-Daten erzeugt und von einem Test byte-genau
 # verglichen (src/lib/shopify/csv-export.test.ts). Immer LF, damit der Test unter Windows nicht scheitert.
 storefront/data/*.csv text eol=lf
+
+# Die Sicherheitstests (src/lib/guards/safety.test.ts) prüfen den Quelltext zeilenweise, z. B. ob
+# `import "server-only";` direkt nach den Kopfkommentaren steht. Mit CRLF (core.autocrlf=true unter
+# Windows) schlagen sie fehl, obwohl der Code korrekt ist. Quelltext daher immer mit LF auschecken.
+*.ts text eol=lf
+*.tsx text eol=lf
+*.mts text eol=lf
