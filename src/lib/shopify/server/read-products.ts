@@ -72,17 +72,23 @@ interface InventoryItemNode {
   unitCost: { amount: string } | null;
   inventoryLevels: {
     pageInfo: { hasNextPage: boolean };
-    nodes: { location: { id: string; name: string; isActive: boolean }; quantities: { name: string; quantity: number }[] }[];
+    nodes: { location: { id: string }; quantities: { name: string; quantity: number }[] }[];
   };
 }
+
+/**
+ * Bezeichnung eines Standorts ohne read_locations: „Standort 12345“ aus der Shopify-ID
+ * (gid://shopify/Location/12345). Den Namen gibt Shopify nur mit read_locations heraus.
+ */
+export const locationLabel = (id: string) => `Standort ${id.split("/").pop() ?? id}`;
 
 export function toVariantInventory(item: InventoryItemNode): VariantInventory {
   const locations = item.inventoryLevels.nodes.map((level): LocationQuantity => {
     const q = (name: string) => level.quantities.find((x) => x.name === name)?.quantity ?? 0;
     return {
       locationId: level.location.id,
-      locationName: level.location.name,
-      locationActive: level.location.isActive,
+      locationName: locationLabel(level.location.id),
+      locationActive: null, // nur mit read_locations lesbar
       available: q("available"),
       onHand: q("on_hand"),
       committed: q("committed"),

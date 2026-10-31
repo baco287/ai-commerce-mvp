@@ -71,9 +71,22 @@ function InventoryDetails({ overview }: { overview: Extract<InventoryStatus, { s
     return <p className="px-5 py-4 text-sm text-muted">Shopify meldet keine Varianten mit Bestandsdaten.</p>;
   }
   const demoOnly = overview.rows.every((r) => r.demo);
+  const brokenLocks = overview.rows.filter((r) => r.demoLockBroken).length;
 
   return (
     <>
+      {brokenLocks > 0 && (
+        <Hint icon={CircleAlert} tone="red" title={`Kaufsperre unwirksam bei ${brokenLocks} Demo-Variante${brokenLocks > 1 ? "n" : ""}`}>
+          <span className="block">
+            Shopify verkauft diese Varianten unabhängig von „nicht überverkaufen“, weil der Bestand nicht verfolgt wird (oder über 0 liegt bzw.
+            Weiterverkauf erlaubt ist). Solange die Produkte <strong>Entwurf</strong> sind, sind sie im Shop trotzdem nicht kaufbar.
+          </span>
+          <span className="mt-1 block text-muted">
+            Beheben im Shopify-Admin: Produkt → Variante → „Inventar verfolgen“ aktivieren, Menge 0 – oder die Import-Datei mit „Vorhandene Produkte
+            überschreiben“ erneut importieren.
+          </span>
+        </Hint>
+      )}
       <div className="flex flex-wrap gap-2 border-b border-line px-5 py-3">
         {STATE_ORDER.filter((s) => overview.counts[s] > 0).map((s) => (
           <Badge key={s} tone={STATE_TONE[s]}>
@@ -89,7 +102,7 @@ function InventoryDetails({ overview }: { overview: Extract<InventoryStatus, { s
             <li key={l.id} className="rounded-lg border border-line bg-surface-2/40 px-3 py-2 text-xs">
               <p className="flex items-center gap-1.5 font-medium text-fg">
                 <MapPin className="size-3.5 text-accent" aria-hidden /> {l.name}
-                {!l.active && <Badge tone="neutral">inaktiv</Badge>}
+                {l.active === false && <Badge tone="neutral">inaktiv</Badge>}
               </p>
               <p className="mt-1 text-muted">
                 verfügbar <Num v={l.available} /> · vorhanden <Num v={l.onHand} /> · reserviert <Num v={l.committed} /> · im Zulauf{" "}
@@ -139,7 +152,9 @@ function InventoryDetails({ overview }: { overview: Extract<InventoryStatus, { s
         </tbody>
       </Table>
       <div className="space-y-1 px-5 py-3 text-xs text-muted">
-        {demoOnly && <p>Alle gelesenen Varianten sind Demo-Produkte: Bestand 0 und „nicht überverkaufen“ sind beabsichtigt (Kaufsperre).</p>}
+        {demoOnly && brokenLocks === 0 && (
+          <p>Alle gelesenen Varianten sind Demo-Produkte: Bestand 0, verfolgt und „nicht überverkaufen“ – die Kaufsperre greift.</p>
+        )}
         {overview.truncated && (
           <p className="text-amber-200">Mindestens ein Artikel liegt an mehr als 10 Standorten – nur die ersten 10 sind berücksichtigt.</p>
         )}
@@ -155,6 +170,14 @@ function InventoryDetails({ overview }: { overview: Extract<InventoryStatus, { s
 }
 
 function StateBadge({ row }: { row: InventoryRow }) {
+  if (row.demoLockBroken) {
+    return (
+      <span className="flex flex-col items-start gap-1">
+        <Badge tone={STATE_TONE[row.state]}>{STOCK_STATE_LABELS[row.state]}</Badge>
+        <Badge tone="red">Demo · Sperre unwirksam</Badge>
+      </span>
+    );
+  }
   if (row.demo && row.state === "out") {
     return (
       <span className="flex flex-col items-start gap-1">

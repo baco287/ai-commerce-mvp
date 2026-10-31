@@ -35,13 +35,19 @@ export interface InventoryRow {
   continueSelling: boolean;
   /** Demo-Produkt: Bestand 0 ist hier beabsichtigt (Kaufsperre) */
   demo: boolean;
+  /**
+   * Demo-Produkt, dessen Bestands-Kaufsperre nicht greift: Bestand nicht verfolgt (Shopify ignoriert
+   * dann „nicht überverkaufen“), Bestand über 0 oder Weiterverkauf bei 0 erlaubt.
+   */
+  demoLockBroken: boolean;
   locations: LocationQuantity[];
 }
 
 export interface LocationTotal {
   id: string;
   name: string;
-  active: boolean;
+  /** null = unbekannt (ohne read_locations) */
+  active: boolean | null;
   available: number;
   onHand: number;
   committed: number;
@@ -95,6 +101,7 @@ export function summarizeInventory(
         state: classifyStock(inv.tracked, inv.quantity, threshold),
         continueSelling: v.inventoryPolicy === "CONTINUE",
         demo: isDemoLike(p),
+        demoLockBroken: isDemoLike(p) && (!inv.tracked || (inv.quantity ?? 0) > 0 || v.inventoryPolicy === "CONTINUE"),
         locations: inv.locations,
       });
       for (const l of inv.locations) {
