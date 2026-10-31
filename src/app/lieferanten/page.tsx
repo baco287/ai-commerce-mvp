@@ -1,17 +1,19 @@
 import { Lock } from "lucide-react";
 import type { Metadata } from "next";
+import { ScoutRecommendations } from "@/components/suppliers/scout-recommendations";
 import { SupplierComparison, type SupplierComparisonItem } from "@/components/suppliers/supplier-comparison";
 import { DemoBadge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { calculateMargin } from "@/lib/calc/pricing";
 import { SUPPLIER_RULES } from "@/lib/config/assumptions";
-import { getProductAnalyses } from "@/lib/data";
+import { getProductAnalyses, getSupplierScoutReports } from "@/lib/data";
 import { formatRating } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Lieferantenvergleich" };
 
-export default function SuppliersPage() {
+export default async function SuppliersPage() {
+  const scout = await getSupplierScoutReports();
   const items: SupplierComparisonItem[] = getProductAnalyses().map((a) => ({
     productId: a.product.id,
     productName: a.product.name,
@@ -63,7 +65,22 @@ export default function SuppliersPage() {
         </Card>
       </div>
 
-      <Card title="Angebote je Produkt" action={<DemoBadge label="Fiktive Lieferanten" />} flush>
+      <Card
+        title="Supplier Scout – Empfehlungen"
+        description="Prüft zusätzlich Produktidentität, CE/GPSR, Direktversand, Vorratskauf und Vorfinanzierung. Empfehlungen geben nichts frei."
+        action={<DemoBadge label="Fiktive Lieferanten" />}
+        className="mb-4"
+        flush
+      >
+        <ScoutRecommendations items={scout} />
+      </Card>
+
+      <Card
+        title="Angebote je Produkt"
+        description="Bisheriger Vergleich nach Mindestanforderungen – wird nach der Umstellung auf den Supplier Scout ersetzt."
+        action={<DemoBadge label="Fiktive Lieferanten" />}
+        flush
+      >
         <SupplierComparison items={items} />
       </Card>
     </>

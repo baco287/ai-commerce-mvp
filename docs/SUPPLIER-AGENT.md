@@ -271,13 +271,20 @@ Erledigt:
   sicher, dass Seiten und Komponenten weder `evaluateAutoPurchase` noch `toPurchaseGuardTerms` importieren und
   dass der günstigste geeignete Lieferant mit der bisherigen Produktanalyse übereinstimmt.
 
+- **Empfehlungskarten:** `/lieferanten` ist eine `async` Server Component und zeigt über
+  `src/components/suppliers/scout-recommendations.tsx` je Produkt (Tabs) drei Karten: Günstigster, Schnellster,
+  Insgesamt bester. Jede Karte zeigt Lieferant, Gesamtkosten je Stück, Lieferzeit, Punkte, Deckungsbeitrag,
+  ein Demo-Abzeichen, den Finanzierungsstatus (grün nur ohne Vorfinanzierung), die offenen Punkte und die
+  aufklappbare Begründung. Hinweise des Berichts (z. B. „Alle geeigneten Angebote erfordern Vorfinanzierung")
+  stehen darüber. Kein Bestellknopf; Hinweis „Eine Empfehlung ist keine Einkaufsfreigabe". Auf dem Handy liegen
+  die Karten untereinander, ab breiten Bildschirmen (xl) nebeneinander. Die bisherige Vergleichstabelle bleibt
+  vorerst darunter.
+
 Offen, jeweils nach Absprache:
 
-1. **Anzeige:** Die Seite `/lieferanten` wird zur `async` Server Component und ruft `getSupplierScoutReports()` auf.
-   Eine neue Komponente `src/components/suppliers/scout-recommendations.tsx` zeigt je Produkt drei Karten
-   (Günstigster / Schnellster / Insgesamt bester) mit den `reasons`, ein Abzeichen „Vorfinanzierung nötig" bzw.
-   „Zahlungsziel bestätigt" und eine aufklappbare Liste der ausgeschlossenen Angebote mit Gründen. Bestehendes
-   `DemoBadge` für `report.containsDemoData`.
+1. **Ausgeschlossene Angebote und Nachweise:** aufklappbare Liste der ausgeschlossenen Angebote mit Gründen,
+   Status der Datenquellen, Karte „Mindestanforderungen" um die Scout-Kriterien (Identität, CE/GPSR,
+   Dropshipping, kein Vorratskauf, Finanzierung) erweitern.
 2. **Freigabe-Fluss:** Die Empfehlung „insgesamt bester" als `ApprovalRequest` vom Typ `supplier_change` in die
    Freigabeliste übernehmen. Eine Freigabe setzt nur den „freigegebenen Lieferanten" je Produkt – Einkäufe bleiben
    über `SAFETY_SWITCHES.autoPurchaseEnabled` gesperrt.
