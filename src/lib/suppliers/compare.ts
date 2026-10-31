@@ -2,8 +2,8 @@
 // Reine Funktion ohne Seiteneffekte – gleiche Eingabe ergibt immer dieselbe Empfehlung.
 
 import { formatDays, formatEur } from "@/lib/format";
-import { checkEligibility, costBreakdown, type CostBreakdown, type Eligibility } from "./eligibility";
-import { assessFinancing, type FinancingAssessment } from "./financing";
+import { checkEligibility, costBreakdown, type CostBreakdown, type Eligibility, type Finding } from "./eligibility";
+import { assessFinancing, type FinancingAssessment, type FinancingStatus } from "./financing";
 import { factValue, type ProductQuery, type SupplierQuote } from "./model";
 import { SCOUT_RULES, type ScoutRules } from "./rules";
 import { scoreQuote, type ScoreBreakdown } from "./scoring";
@@ -21,10 +21,28 @@ export interface QuoteEvaluation {
 
 export type RecommendationKind = "cheapest" | "fastest" | "best";
 
+/**
+ * Empfehlung des Scouts – reine Information für Menschen, NIE eine Einkaufsfreigabe.
+ * Die strukturierten Felder erlauben der Oberfläche Abzeichen ohne Auswertung der Begründungstexte.
+ */
 export interface Recommendation {
   kind: RecommendationKind;
   quoteId: string;
   supplierName: string;
+  /** Immer "none": Eine Empfehlung gibt nichts frei. Einkäufe laufen nur über die Einkaufssperre. */
+  approval: "none";
+  /** Angebot stammt aus fiktiven Demo-Daten */
+  demo: boolean;
+  /** Müssten wir für dieses Angebot Geld vorstrecken? (konservativ, siehe financing.ts) */
+  requiresPrefinancing: boolean;
+  financingStatus: FinancingStatus;
+  /** Offene Punkte (fehlende oder unbestätigte Angaben), die vor einer Freigabe geklärt werden müssen */
+  openPoints: Finding[];
+  /** Einkauf + Versand + Import je Stück in EUR */
+  perUnit: number;
+  deliveryDays: { min: number; max: number };
+  /** Gesamtbewertung 0–100 */
+  score: number;
   /** Nachvollziehbare Begründung, ein Satz je Eintrag */
   reasons: string[];
 }
@@ -157,7 +175,22 @@ export function compareQuotes(query: ProductQuery, quotes: SupplierQuote[], rule
   if (quotes.some((q) => q.demo)) notes.push("Enthält Demo-Daten fiktiver Lieferanten.");
 
   const recommend = (kind: RecommendationKind, e: Scored | undefined, reasons: (e: Scored) => string[]): Recommendation | null =>
-    e ? { kind, quoteId: e.quote.id, supplierName: e.quote.supplierName, reasons: reasons(e) } : null;
+    e
+      ? {
+          kind,
+          quoteId: e.quote.id,
+          supplierName: e.quote.supplierName,
+          approval: "none",
+          demo: e.quote.demo,
+          requiresPrefinancing: e.financing.requiresPrefinancing,
+          financingStatus: e.financing.status,
+          openPoints: e.eligibility.warnings,
+          perUnit: e.cost.perUnit,
+          deliveryDays: e.deliveryDays,
+          score: e.score.total,
+          reasons: reasons(e),
+        }
+      : null;
 
   return {
     query,
